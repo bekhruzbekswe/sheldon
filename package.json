@@ -1,0 +1,27 @@
+{
+  "name": "sheldon",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "hello": "bun run src/index.ts",
+    "ask": "bun run src/ask.ts",
+    "research": "bun run src/run.ts",
+    "synthesize": "bun run src/synth.ts",
+    "dashboard": "bun run src/dashboard.ts",
+    "watch": "bun run src/watch.ts",
+    "inspect": "bun run src/inspect.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/jsdom": "^28.0.1",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "@xenova/transformers": "^2.17.2",
+    "hono": "^4.12.17",
+    "jsdom": "^29.1.1"
+  }
+}

@@ -1,0 +1,58 @@
+# Agent orientation
+
+Read this first if you're a fresh Claude Code session being asked to work on Sheldon. It's the load-bearing context for everything else.
+
+## What Sheldon is
+
+A research agent that runs for hours, not seconds. The user gives it:
+1. A research question (e.g. "top pain points of the AI age")
+2. A wall-clock deadline (e.g. 5 hours from now)
+
+It runs autonomously until the deadline, then delivers a written report. The user is *not* watching live — they're at the gym, asleep, etc. They check live progress via a JSONL event log if they want, but expect to come back to a finished `report.md`.
+
+This is fundamentally different from a chatbot or Q&A tool. Q&A tools answer in seconds. Sheldon does sustained, multi-hour work.
+
+## How it works (one paragraph)
+
+The agent maintains two tables in SQLite — a **frontier queue** (questions to investigate, scored) and a **fact store** (claims with sources). The main loop pops the highest-scored frontier question, searches/scrapes/extracts atomic claims, stores them, and asks the LLM to propose follow-up questions which go back on the frontier. Time is split into three phases: **breadth** (decompose, cast wide net), **depth** (drill into best leads), **synthesis** (locked, no more searches; cluster facts and write the report). The clock decides when to switch phases.
+
+## Constraints that shape the design
+
+- **LLM context is 32k tokens** — 24k usable per call after system + thinking + output budget. Hundreds of small focused calls beat one big call.
+- **State lives in SQLite, not in chat history** — the LLM is stateless across iterations. It only sees what the current step needs.
+- **LLM never sees raw web pages** — pages are chunked (~400 tok) and embedding-reranked before hitting any prompt.
+- **Two LLM modes**: `fast()` (no thinking, sub-second, used for ~all calls including L6 synthesis) and `deep()` (thinking on, currently unused at runtime — Qwen3.5-9B in deep mode consumed its full output budget on reasoning and returned 0 content tokens during L6 synthesis. Documented workarounds live in `docs/layers/L6-synthesis.md` and `openspec/specs/section-writer/spec.md`).
+- **The LLM endpoint requires a browser User-Agent** (`Mozilla/5.0`). Cloudflare blocks the OpenAI SDK's default UA. Always set `defaultHeaders` or use plain `fetch`.
+
+## Working in this repo
+
+OpenSpec is the source of truth for tasks, decisions, and architecture **for layers that have shipped or are actively in flight**. Future layers live in `docs/layers/` until promoted.
+
+- **In-flight work** (one or two at a time): `openspec/changes/<change-name>/` — has `proposal.md` (why), `design.md` (how), `specs/` (capability deltas), and `tasks.md` (the actual checklist).
+- **Stable specs**: `openspec/specs/<capability>/spec.md` — what the system *currently does*. Only true after a change is archived.
+- **Future layer plans**: `docs/layers/L*-*.md` — sketches of what each layer will do. **Not specs**, intentionally light. When you start a layer, read its doc for orientation, then run `/opsx:new <layer-name>` to scaffold the real openspec change. After archiving, leave the layer doc in place as historical context.
+- **Slash commands**: `/opsx:new`, `/opsx:apply`, `/opsx:archive`, `/opsx:continue`, `/opsx:explore`, `/opsx:verify`, `/opsx:status`, `/opsx:onboard`, etc.
+
+When picking up work, run `openspec list` to see active changes, or `openspec status --change <name>` for artifact progress on a specific one.
+
+## Layer status
+
+| Layer | Capability(ies) | Status |
+|---|---|---|
+| L0 | `llm-client` | **done** (`add-foundation`, archived) |
+| L1 | `event-log`, `event-tail` | **done** (`add-event-log`, archived) |
+| L2 | `searxng-client`, `web-scraper`, `search-loop` | **done** (`add-search-loop`, archived) |
+| L3 | `chunker`, `embedder`, `fact-store`, `claim-extractor` | **done** (`add-fact-store`, archived) |
+| L4 | `frontier-queue`, `question-decomposer`, `followup-proposer`, `scorer` | **done** (`add-frontier-queue`, archived) |
+| L5 | `phase-machine`, `run-state` | **done** (`add-phase-machine`, archived) |
+| L6 | `cluster-facts`, `section-writer`, `report-stitcher` | **done** (`add-synthesis`, archived) |
+| L7 | `resume` | **done** (`add-resume`, archived) |
+| L8 | `dashboard-server`, `dashboard-ui` | **done** (`add-dashboard`, archived) |
+
+## Hard rules for AI sessions
+
+1. **Don't skip layers.** L3 needs L1 (events) to log claim writes. L6 needs L3 (fact store) to read from.
+2. **Don't add features to a layer that aren't in its `tasks.md`.** Scope is intentional. If you think something's missing, write a new change proposal — don't smuggle work into an existing one.
+3. **Update the change's `tasks.md` as you go.** Mark items done when done. Don't batch.
+4. **Run `openspec verify` before `archive`.** A spec that doesn't pass validation will mislead future sessions.
+5. **Comments in code: only when the WHY isn't obvious from the code.** Don't narrate.

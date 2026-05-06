@@ -1,0 +1,1666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Sheldon — Research Run</title>
+<meta name="viewport" content="width=1280" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ============ TOKENS ============ */
+  :root {
+    --bg-0: oklch(0.155 0.006 260);
+    --bg-1: oklch(0.195 0.007 260);
+    --bg-2: oklch(0.225 0.008 260);
+    --bg-3: oklch(0.265 0.009 260);
+    --line: oklch(0.30 0.008 260 / 0.5);
+    --line-soft: oklch(0.30 0.008 260 / 0.28);
+
+    --fg-0: oklch(0.97 0.005 260);
+    --fg-1: oklch(0.83 0.006 260);
+    --fg-2: oklch(0.62 0.008 260);
+    --fg-3: oklch(0.46 0.008 260);
+
+    --accent: oklch(0.82 0.13 175);
+    --accent-dim: oklch(0.82 0.13 175 / 0.16);
+    --accent-line: oklch(0.82 0.13 175 / 0.42);
+
+    --phase-breadth: oklch(0.74 0.10 240);
+    --phase-depth: oklch(0.82 0.13 175);
+    --phase-synthesis: oklch(0.80 0.11 75);
+
+    --ok: oklch(0.78 0.10 155);
+    --warn: oklch(0.82 0.10 85);
+    --err: oklch(0.72 0.13 25);
+
+    --k-llm: oklch(0.78 0.10 295);
+    --k-search: oklch(0.78 0.10 240);
+    --k-scrape: oklch(0.80 0.10 200);
+    --k-chunk: oklch(0.74 0.06 260);
+    --k-fact: oklch(0.82 0.13 175);
+    --k-frontier: oklch(0.80 0.10 75);
+    --k-iteration: oklch(0.74 0.06 260);
+    --k-phase: oklch(0.80 0.11 50);
+    --k-synthesis: oklch(0.80 0.11 75);
+    --k-resume: oklch(0.74 0.06 260);
+
+    --t-0: 240; --t-1: 175; --t-2: 85; --t-3: 35; --t-4: 305; --t-5: 145;
+
+    --r: 4px;
+    --r-lg: 8px;
+
+    /* golden ratios for layout (hero=61.8%, sidebar=38.2%; lower: 38.2/61.8) */
+    --phi-l: 61.8fr;
+    --phi-s: 38.2fr;
+
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg-0);
+    color: var(--fg-1);
+    font: 13px/1.5 var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    letter-spacing: -0.005em;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(80% 50% at 70% -10%, oklch(0.26 0.02 200 / 0.35), transparent 60%),
+      radial-gradient(60% 40% at 0% 100%, oklch(0.22 0.01 260 / 0.4), transparent 60%);
+  }
+
+  /* ============ APP SHELL ============ */
+  .app {
+    position: relative; z-index: 1;
+    max-width: 1680px;
+    margin: 0 auto;
+    padding: 32px 40px 40px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  /* ============ THIN TOP BAR ============ */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .brand {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .brand-mark {
+    width: 14px; height: 14px;
+    border: 1.5px solid var(--accent);
+    border-radius: 2px;
+    position: relative;
+    flex: none;
+  }
+  .brand-mark::after {
+    content: ""; position: absolute; inset: 2.5px;
+    background: var(--accent); opacity: 0.5;
+  }
+  .brand-name {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--fg-1);
+  }
+  .brand-sep { color: var(--fg-3); font-family: var(--font-mono); font-size: 11px; }
+  .brand-run { font-family: var(--font-mono); font-size: 11px; color: var(--fg-2); }
+  .brand-run b { color: var(--fg-1); font-weight: 500; }
+
+  .topbar-meta {
+    display: flex; align-items: center; gap: 28px;
+    font-family: var(--font-mono); font-size: 11px; color: var(--fg-3);
+  }
+  .topbar-meta b { color: var(--fg-1); font-weight: 500; }
+
+  /* ============ HERO ROW ============ */
+  .hero-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  /* Box 1: research topic + clock */
+  .run-box {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    padding: 22px 32px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .run-box::before {
+    content: "";
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 2px; background: var(--accent);
+  }
+  .run-body {
+    display: grid;
+    grid-template-columns: var(--phi-l) var(--phi-s);
+    gap: 32px;
+    align-items: stretch;
+  }
+  .run-topic {
+    display: flex; flex-direction: column;
+    min-width: 0;
+  }
+  .run-topic .phase-rail-wrap { margin-top: auto; padding-top: 24px; }
+  .run-clock {
+    border-left: 1px solid var(--line-soft);
+    padding-left: 28px;
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+    min-height: 100%;
+  }
+  .run-clock .clock-big { margin-top: 6px; }
+
+  /* Box 2: currently asking + pipeline */
+  .q-box {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    padding: 22px 32px;
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    column-gap: 32px;
+    height: 200px;
+    overflow: hidden;
+    align-items: stretch;
+  }
+  .q-main { min-width: 0; display: flex; flex-direction: column; }
+  .q-swap { transition: opacity 240ms ease; }
+  .q-swap.is-swapping { opacity: 0; }
+  .q-parent-link {
+    margin-top: 14px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--fg-3);
+    display: flex; align-items: baseline; gap: 8px;
+    overflow: hidden;
+  }
+  .q-parent-link .pl-arrow { color: var(--fg-3); white-space: nowrap; }
+  .q-parent-link .pl-text {
+    color: var(--fg-2);
+    font-family: var(--font-sans);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .q-parent-link.is-empty .pl-arrow { display: none; }
+  .q-parent-link.is-empty .pl-text { color: var(--fg-3); font-style: italic; }
+
+  /* 4-step pipeline cards */
+  .q-wheel-col {
+    display: flex; flex-direction: column;
+    align-items: stretch; justify-content: center;
+    padding-left: 24px;
+    min-width: 0;
+  }
+  .pipe-cards {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+    width: 100%;
+    justify-items: end;
+  }
+  .pipe-card {
+    position: relative;
+    background: transparent;
+    border: 0;
+    border-left: 1px solid var(--line);
+    border-radius: 0;
+    padding: 9px 14px 9px 18px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    column-gap: 12px;
+    transition: background 320ms ease, border-color 320ms ease, color 320ms ease;
+    min-width: 0;
+  }
+  /* (left-edge ribbon removed; border is the only left edge) */
+  .pipe-card[data-step="search"]  { width: 50%; }
+  .pipe-card[data-step="scrape"]  { width: 67%; }
+  .pipe-card[data-step="extract"] { width: 84%; }
+  .pipe-card[data-step="propose"] { width: 100%; }
+  .pipe-card-head {
+    display: contents;
+  }
+  .pipe-card-head .pc-num {
+    color: var(--fg-3);
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    width: 14px;
+    text-align: left;
+  }
+  .pipe-card-head .pc-dot { display: none; }
+  .pipe-card-head .pc-name {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-1);
+    font-weight: 500;
+  }
+  .pipe-card-val {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--fg-2);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.005em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    text-align: right;
+    transition: color 320ms ease;
+  }
+  .pipe-card.is-done {
+    background: transparent;
+    opacity: 0.5;
+  }
+  .pipe-card.is-done .pc-num   { color: var(--fg-3); }
+  .pipe-card.is-done .pc-name  { color: var(--fg-2); }
+  .pipe-card.is-done .pipe-card-val { color: var(--fg-2); }
+  .pipe-card.is-pending {
+    background: transparent;
+  }
+  .pipe-card.is-pending .pc-name { color: var(--fg-3); }
+  .pipe-card.is-pending .pipe-card-val { color: var(--fg-3); }
+  .pipe-card.is-active {
+    background: oklch(0.82 0.13 175 / 0.06);
+    border-left-color: var(--accent);
+  }
+  .pipe-card.is-active .pc-num   { color: var(--accent); }
+  .pipe-card.is-active .pc-name  { color: var(--accent); font-weight: 600; }
+  .pipe-card.is-active .pipe-card-val { color: var(--fg-0); font-weight: 500; }
+
+  /* horizontal 4-step pipeline */
+  .q-pipe-col {
+    display: flex; flex-direction: column;
+    justify-content: flex-start;
+    gap: 14px;
+    border-left: 1px solid var(--line-soft);
+    padding-left: 24px;
+    min-width: 0;
+  }
+  .pipe {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    align-items: start;
+    position: relative;
+    margin-top: 4px;
+  }
+  .pipe::before {
+    content: "";
+    position: absolute;
+    left: 14px; right: 14px;
+    top: 13px;
+    height: 1px;
+    background: var(--line);
+    z-index: 0;
+  }
+  .pipe-step {
+    position: relative;
+    display: flex; flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    z-index: 1;
+  }
+  .pipe-dot {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--bg-0);
+    border: 1.5px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fg-3);
+    transition: all 300ms ease;
+  }
+  .pipe-step.is-done .pipe-dot {
+    background: var(--fg-2);
+    border-color: var(--fg-2);
+    color: var(--bg-0);
+  }
+  .pipe-step.is-active .pipe-dot {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-0);
+    box-shadow: 0 0 0 4px oklch(0.82 0.13 175 / 0.18);
+    animation: pipe-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pipe-pulse {
+    0%, 100% { box-shadow: 0 0 0 4px oklch(0.82 0.13 175 / 0.18); }
+    50%      { box-shadow: 0 0 0 8px oklch(0.82 0.13 175 / 0.05); }
+  }
+  .pipe-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    transition: color 300ms ease;
+    text-align: center;
+  }
+  .pipe-step.is-done  .pipe-label { color: var(--fg-2); }
+  .pipe-step.is-active .pipe-label { color: var(--accent); font-weight: 600; }
+  .pipe-value {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fg-3);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    min-height: 14px;
+  }
+  .pipe-step.is-active .pipe-value { color: var(--fg-0); }
+  .task-h1 {
+    font-size: 36px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    color: var(--fg-0);
+    margin: 8px 0 0;
+    text-wrap: pretty;
+    max-width: 30ch;
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .live {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--accent); font-weight: 600;
+  }
+  .live::before {
+    content: "";
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: blink 1.6s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100% {opacity:1} 50% {opacity:0.35} }
+
+  .task-context {
+    color: var(--fg-3);
+    font-size: 12px;
+    margin-bottom: 8px;
+    max-width: 78ch;
+  }
+  .task-context b { color: var(--fg-1); font-weight: 500; }
+
+  .now-q {
+    font-size: 26px;
+    font-weight: 500;
+    line-height: 1.22;
+    letter-spacing: -0.02em;
+    color: var(--fg-0);
+    text-wrap: pretty;
+    margin: 6px 0 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .parent-q {
+    font-size: 14px;
+    color: var(--fg-1);
+    line-height: 1.3;
+    margin-top: 6px;
+    text-wrap: pretty;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .parent-empty {
+    font-size: 13px; color: var(--fg-3); margin-top: 6px;
+    font-style: italic;
+  }
+
+  .pipeline {
+    display: flex;
+    gap: 22px;
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--line-soft);
+    align-items: baseline;
+  }
+  .step {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    transition: opacity 400ms ease;
+  }
+  .step + .step::before {
+    content: "›";
+    color: var(--fg-3);
+    margin-right: 14px;
+    font-size: 11px;
+  }
+  .step .step-label, .step .step-value {
+    transition: color 400ms ease;
+  }
+  .step-label {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--fg-3); letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .step-value {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--fg-2); font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .step.is-active .step-label { color: var(--accent); font-weight: 600; }
+  .step.is-active .step-value { color: var(--fg-0); }
+  .step.is-pending { opacity: 0.5; }
+  .step.is-pending .step-value { color: var(--fg-3); }
+
+  /* SIDEBAR: clock + stats */
+  /* legacy side/clock-card classes — no longer used in DOM but keep harmless */
+  .side, .clock-card { display: none; }
+  .clock-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 14px;
+  }
+  .phase-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 4px 10px 4px 8px;
+    border-radius: 999px;
+    font-family: var(--font-mono); font-size: 10.5px;
+    letter-spacing: 0.10em; text-transform: uppercase;
+    color: var(--fg-1);
+    background: var(--bg-2); border: 1px solid var(--line);
+  }
+  .phase-badge .pip { width: 6px; height: 6px; border-radius: 50%; background: var(--phase-depth); }
+  body[data-phase="breadth"] .phase-badge .pip { background: var(--phase-breadth); }
+  body[data-phase="synthesis"] .phase-badge .pip { background: var(--phase-synthesis); }
+
+  .clock-big {
+    font-family: var(--font-mono);
+    font-size: 56px;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--fg-0);
+    font-variant-numeric: tabular-nums;
+    display: flex; align-items: baseline; gap: 0;
+  }
+  .clock-big .u { font-size: 20px; color: var(--fg-3); font-weight: 400; margin: 0 6px 0 1px; letter-spacing: 0; }
+  .clock-meta {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line-soft);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+  }
+  .clock-meta > div { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .clock-meta b { color: var(--fg-1); font-weight: 500; font-size: 22px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; text-transform: none; }
+
+  /* Phase rail — full row under hero+side */
+  .phase-rail-wrap {
+    grid-column: 1 / -1;
+    margin-top: -8px;
+  }
+  .phase-rail {
+    position: relative;
+    display: grid;
+    grid-template-columns: 30fr 50fr 20fr;
+    gap: 6px;
+    height: 42px;
+  }
+  .pcell {
+    position: relative;
+    border-radius: var(--r-md);
+    background: var(--bg-2);
+    border: 1px solid var(--line-soft);
+    padding: 7px 12px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    overflow: hidden;
+    transition: border-color 400ms ease;
+  }
+  .pcell-label {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--fg-3); position: relative; z-index: 1;
+    transition: color 400ms ease;
+  }
+  .pcell-range {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--fg-3); position: relative; z-index: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .pcell .fill {
+    position: absolute; inset: 0;
+    transform-origin: left center; transform: scaleX(0);
+    transition: transform 1.4s linear;
+    will-change: transform;
+  }
+  .pcell[data-phase="breadth"] .fill { background: linear-gradient(90deg, oklch(0.74 0.10 240 / 0.18), oklch(0.74 0.10 240 / 0.10)); }
+  .pcell[data-phase="depth"] .fill   { background: linear-gradient(90deg, oklch(0.82 0.13 175 / 0.20), oklch(0.82 0.13 175 / 0.10)); }
+  .pcell[data-phase="synthesis"] .fill { background: linear-gradient(90deg, oklch(0.80 0.11 75 / 0.20), oklch(0.80 0.11 75 / 0.10)); }
+  .pcell.is-done .fill { transform: scaleX(1); }
+  .pcell.is-active .pcell-label { color: var(--fg-0); font-weight: 600; }
+  .pcell.is-active[data-phase="breadth"]   { border-color: var(--phase-breadth); }
+  .pcell.is-active[data-phase="depth"]     { border-color: var(--phase-depth); }
+  .pcell.is-active[data-phase="synthesis"] { border-color: var(--phase-synthesis); }
+  .pmarker {
+    position: absolute; top: 0; bottom: 0;
+    width: 2px; background: var(--fg-0); z-index: 2;
+    box-shadow: 0 0 8px oklch(0.96 0.005 260 / 0.6);
+    transition: left 1.4s linear;
+    will-change: left;
+  }
+  .pmarker::before {
+    content: "";
+    position: absolute;
+    left: 50%; top: -1px;
+    transform: translate(-50%, -100%);
+    width: 0; height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid var(--fg-0);
+    filter: drop-shadow(0 0 4px oklch(0.96 0.005 260 / 0.5));
+  }
+
+  /* ============ LOWER ROW: frontier + facts ============ */
+  .lower-row {
+    display: grid;
+    grid-template-columns: var(--phi-s) var(--phi-l);
+    gap: 24px;
+    align-items: stretch;
+  }
+  .panel {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    padding: 22px 24px 18px;
+    min-width: 0;
+    display: flex; flex-direction: column;
+  }
+  .panel-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px; margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .panel-title {
+    font-family: var(--font-mono);
+    font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--fg-1); font-weight: 600;
+  }
+  .panel-title .count {
+    color: var(--fg-3); margin-left: 10px; font-weight: 400;
+    letter-spacing: 0.06em;
+  }
+  .panel-actions { display: flex; gap: 4px; }
+
+  /* ---- frontier ---- */
+  .frontier {
+    display: flex; flex-direction: column; gap: 0;
+    min-height: 0;
+    overflow-y: auto;
+    margin: 0 -8px;
+    padding: 0 8px;
+    flex: 1;
+    max-height: 540px;
+  }
+  .q {
+    display: grid;
+    grid-template-columns: 22px 12px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line-soft);
+    cursor: default;
+    transition: background 120ms ease;
+  }
+  .q:last-child { border-bottom: 0; }
+  .q:hover { background: oklch(0.225 0.008 260 / 0.4); }
+  .q-rank {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--fg-3); text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .q-status {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--fg-3);
+    margin: 0 auto;
+    transition: background 400ms ease, box-shadow 400ms ease;
+  }
+  .q[data-status="in-progress"] .q-status {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+  .q[data-status="done"] .q-status { background: var(--ok); opacity: 0.55; }
+  .q[data-status="skipped"] .q-status { background: var(--warn); opacity: 0.45; }
+  .q-text-wrap { display: flex; align-items: center; min-width: 0; }
+  .q-tree {
+    color: var(--fg-3); font-family: var(--font-mono);
+    font-size: 11px; margin-right: 8px; flex: none; opacity: 0.55;
+  }
+  .q-text {
+    color: var(--fg-1); font-size: 13px; line-height: 1.4;
+    overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .q[data-status="done"] .q-text { color: var(--fg-3); }
+  .q[data-status="skipped"] .q-text { color: var(--fg-3); }
+  .q {
+    transition: background 400ms ease, border-bottom-color 400ms ease, padding 400ms ease, margin 400ms ease;
+  }
+  .q[data-status="in-progress"] {
+    background: linear-gradient(90deg, var(--accent-dim), transparent 70%);
+    border-bottom-color: var(--accent-line);
+    margin: 0 -8px; padding: 10px 8px;
+  }
+  .q-tail {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--fg-3); font-variant-numeric: tabular-nums;
+  }
+  .q-score-bar {
+    width: 28px; height: 2px; background: var(--bg-3); position: relative;
+  }
+  .q-score-bar::after {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+    width: var(--w, 50%); background: var(--accent); opacity: 0.7;
+  }
+  .q-score { color: var(--fg-1); }
+
+  .frontier-section {
+    margin: 14px 0 4px;
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--fg-3);
+    display: flex; justify-content: space-between;
+    border-top: 1px dashed var(--line-soft);
+    padding: 14px 0 6px;
+  }
+
+  /* ---- facts ---- */
+  .facts {
+    display: flex; flex-direction: column; gap: 0;
+    overflow-y: auto;
+    margin: 0 -8px;
+    padding: 0 8px 4px;
+    flex: 1;
+    max-height: 540px;
+  }
+  .fact {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 24px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--line-soft);
+    overflow: hidden;
+  }
+  .fact.is-entering {
+    animation: fact-in 700ms cubic-bezier(.2,.7,.2,1) both;
+  }
+  .fact.is-leaving {
+    animation: fact-out 400ms cubic-bezier(.4,0,.6,1) both;
+  }
+  .fact:last-child { border-bottom: 0; }
+  .fact-meta {
+    display: flex; flex-direction: column; gap: 8px;
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--fg-3); text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .fact-id { color: var(--fg-2); font-size: 11px; }
+  .fact-conf {
+    display: flex; align-items: center; gap: 6px;
+    justify-content: flex-end;
+  }
+  .conf-bar {
+    width: 26px; height: 2px; background: var(--bg-3); position: relative;
+  }
+  .conf-bar::after {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+    width: var(--w, 80%); background: var(--ok);
+  }
+  .fact-body { min-width: 0; }
+  .fact-claim {
+    color: var(--fg-0); font-size: 14px; line-height: 1.5;
+    margin-bottom: 10px; text-wrap: pretty;
+    letter-spacing: -0.005em;
+  }
+  .fact-foot {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    font-family: var(--font-mono); font-size: 11px;
+  }
+  .topic {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 9px 3px 7px;
+    border-radius: 999px;
+    background: oklch(0.74 0.07 var(--h, 240) / 0.12);
+    border: 1px solid oklch(0.74 0.07 var(--h, 240) / 0.30);
+    color: oklch(0.86 0.07 var(--h, 240));
+    font-size: 10.5px; letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .topic::before {
+    content: ""; width: 5px; height: 5px;
+    background: oklch(0.86 0.07 var(--h, 240)); border-radius: 50%;
+  }
+  .src {
+    color: var(--fg-3); text-decoration: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 360px;
+  }
+  .src:hover { color: var(--fg-1); }
+  .src .domain { color: var(--fg-2); }
+  @keyframes fact-in {
+    0% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; border-bottom-width: 0; }
+    40% { opacity: 0; max-height: 200px; padding-top: 16px; padding-bottom: 16px; border-bottom-width: 1px; }
+    100% { opacity: 1; max-height: 200px; padding-top: 16px; padding-bottom: 16px; border-bottom-width: 1px; }
+  }
+  @keyframes fact-out {
+    0% { opacity: 1; max-height: 200px; }
+    100% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; border-bottom-width: 0; }
+  }
+
+  /* ---- mini stats embedded into top of frontier panel? No — keep as own row above log ---- */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    padding: 22px 28px;
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+  }
+  .stat {
+    display: flex; flex-direction: column; gap: 8px;
+    border-right: 1px solid var(--line-soft);
+    padding-right: 24px;
+    min-width: 0;
+  }
+  .stat:last-child { border-right: 0; padding-right: 0; }
+  .stat-label {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--fg-3);
+  }
+  .stat-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px;
+  }
+  .stat-value {
+    font-family: var(--font-mono); font-size: 26px; font-weight: 500;
+    color: var(--fg-0); letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .stat-delta {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--ok); font-variant-numeric: tabular-nums;
+  }
+  .stat-delta.is-warn { color: var(--warn); }
+  .stat-delta.is-muted { color: var(--fg-3); }
+  .stat-spark { height: 24px; width: 100%; }
+
+  /* ============ EVENT LOG ============ */
+  .log-card {
+    padding: 0;
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+  }
+  .log-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px;
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .log-filters { display: flex; gap: 4px; flex-wrap: wrap; }
+  .chip {
+    font-family: var(--font-mono); font-size: 10.5px;
+    letter-spacing: 0.06em;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--fg-3);
+    cursor: pointer; user-select: none;
+    transition: color 200ms ease, background 200ms ease, border-color 200ms ease;
+  }
+  .chip:hover { color: var(--fg-1); }
+  .chip.is-on {
+    background: var(--bg-2);
+    color: var(--fg-0);
+    border-color: var(--line);
+  }
+  .chip .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+
+  .log-status {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--fg-3); display: flex; align-items: center; gap: 10px;
+  }
+  .log-pause-indicator { display: none; color: var(--warn); }
+  .log.is-paused ~ .log-head .log-pause-indicator { display: inline; }
+
+  .log {
+    height: 240px; overflow-y: auto;
+    padding: 10px 24px 14px;
+    font-family: var(--font-mono); font-size: 11.5px; line-height: 1.6;
+  }
+  .log-line {
+    display: grid;
+    grid-template-columns: 80px 56px 110px 1fr 60px;
+    gap: 14px;
+    padding: 1px 0;
+    color: var(--fg-2);
+    animation: line-in 300ms ease both;
+  }
+  .log-line .ts { color: var(--fg-3); }
+  .log-line .layer { color: var(--fg-3); font-size: 10.5px; }
+  .log-line .kind { letter-spacing: 0.02em; }
+  .log-line .summary {
+    color: var(--fg-1);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .log-line .dur {
+    color: var(--fg-3); text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .log-line[data-fam="llm"] .kind { color: var(--k-llm); }
+  .log-line[data-fam="search"] .kind { color: var(--k-search); }
+  .log-line[data-fam="scrape"] .kind { color: var(--k-scrape); }
+  .log-line[data-fam="chunk"] .kind,
+  .log-line[data-fam="embed"] .kind,
+  .log-line[data-fam="claim"] .kind { color: var(--k-chunk); }
+  .log-line[data-fam="fact"] .kind { color: var(--k-fact); }
+  .log-line[data-fam="frontier"] .kind { color: var(--k-frontier); }
+  .log-line[data-fam="iteration"] .kind { color: var(--k-iteration); }
+  .log-line[data-fam="phase"] .kind { color: var(--k-phase); font-weight: 600; }
+  .log-line[data-fam="cluster"] .kind,
+  .log-line[data-fam="section"] .kind,
+  .log-line[data-fam="report"] .kind { color: var(--k-synthesis); font-weight: 600; }
+  .log-line[data-error] {
+    background: oklch(0.72 0.13 25 / 0.08);
+    box-shadow: inset 2px 0 0 var(--err);
+    padding-left: 6px; margin-left: -6px;
+  }
+  .log-line[data-error] .summary { color: var(--err); }
+  .log-line { will-change: opacity; }
+  .log-line.is-entering {
+    animation: line-in 350ms cubic-bezier(.2,.7,.2,1) both;
+  }
+  @keyframes line-in {
+    0% { opacity: 0; max-height: 0; padding: 0; }
+    100% { opacity: 1; max-height: 30px; padding: 1px 0; }
+  }
+
+  /* ============ SYNTHESIS OVERLAY ============ */
+  .synth { display: none; }
+  body[data-phase="synthesis"] .synth {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 32px;
+    padding: 36px 40px;
+    background: linear-gradient(180deg, oklch(0.80 0.11 75 / 0.06), transparent 60%), var(--bg-1);
+    border: 1px solid oklch(0.80 0.11 75 / 0.32);
+    border-radius: var(--r-lg);
+  }
+  body[data-phase="synthesis"] .lower-row,
+  body[data-phase="synthesis"] .stats-row { opacity: 0.5; pointer-events: none; }
+  .synth-h { font-size: 26px; font-weight: 500; color: var(--fg-0); margin: 8px 0 8px; letter-spacing: -0.02em; }
+  .synth-sub { color: var(--fg-2); margin-bottom: 24px; max-width: 56ch; }
+  .clusters { position: relative; min-height: 240px; }
+  .cluster {
+    position: absolute; border-radius: 50%;
+    background: oklch(0.80 0.11 var(--h, 75) / 0.12);
+    border: 1px solid oklch(0.80 0.11 var(--h, 75) / 0.40);
+    color: var(--fg-0);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 11px; text-align: center; padding: 10px;
+    transition: all 700ms cubic-bezier(.2,.7,.2,1);
+  }
+  .sections { display: flex; flex-direction: column; gap: 10px; }
+  .section-row {
+    display: grid;
+    grid-template-columns: 14px 1fr auto auto;
+    gap: 12px; align-items: center;
+    padding: 10px 14px;
+    background: var(--bg-2);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r);
+  }
+  .section-row.is-writing { border-color: var(--phase-synthesis); }
+  .sec-bullet { width: 8px; height: 8px; border-radius: 50%; background: var(--bg-3); margin: 0 auto; }
+  .section-row.is-writing .sec-bullet { background: var(--phase-synthesis); box-shadow: 0 0 0 3px oklch(0.80 0.11 75 / 0.20); }
+  .section-row.is-done .sec-bullet { background: var(--ok); opacity: 0.6; }
+  .section-row.is-done .sec-name { color: var(--fg-2); }
+  .sec-name { color: var(--fg-1); font-size: 13px; }
+  .sec-cites, .sec-words {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--fg-3); font-variant-numeric: tabular-nums;
+  }
+  .sec-words { min-width: 60px; text-align: right; }
+
+  /* ============ EMPTY STATE ============ */
+  .empty { display: none; text-align: center; padding: 120px 20px; color: var(--fg-2); }
+  body[data-phase="idle"] .hero-row,
+  body[data-phase="idle"] .stats-row,
+  body[data-phase="idle"] .lower-row,
+  body[data-phase="idle"] .log-card { display: none !important; }
+  body[data-phase="idle"] .empty { display: block; }
+  .empty .e-glyph {
+    width: 24px; height: 24px;
+    margin: 0 auto 20px;
+    border: 1.5px dashed var(--line);
+    border-radius: 3px;
+  }
+  .empty h2 { color: var(--fg-1); font-size: 18px; font-weight: 500; margin: 0 0 8px; }
+  .empty p { font-size: 13px; max-width: 50ch; margin: 0 auto; color: var(--fg-3); line-height: 1.6; }
+  .empty code {
+    font-family: var(--font-mono);
+    background: var(--bg-2); border: 1px solid var(--line-soft);
+    padding: 2px 8px; border-radius: 3px; color: var(--fg-1);
+  }
+
+  /* scrollbars */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: oklch(0.30 0.008 260 / 0.5); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: oklch(0.40 0.008 260 / 0.6); border: 2px solid transparent; background-clip: padding-box; }
+
+  @keyframes swoop {
+    0% { transform: translateY(-8px); opacity: 0; }
+    60% { transform: translateY(2px); opacity: 1; }
+    100% { transform: translateY(0); }
+  }
+  .swoop { animation: swoop 600ms cubic-bezier(.2,.7,.2,1) both; }
+</style>
+</head>
+<body data-phase="depth">
+
+<div class="app">
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <span class="brand-name">SHELDON</span>
+      <span class="brand-sep">/</span>
+      <span class="brand-run">run · <b id="run-id">r-7K3F2A</b></span>
+    </div>
+    <div class="topbar-meta">
+      <span>started <b id="started-at">14:02</b></span>
+    </div>
+  </header>
+
+  <!-- EMPTY STATE -->
+  <div class="empty">
+    <div class="e-glyph"></div>
+    <h2>No active run</h2>
+    <p>Start one with <code>sheldon run "your question" --deadline 5h</code> and this dashboard will come alive.</p>
+  </div>
+
+  <!-- HERO ROW -->
+  <section class="hero-row" data-screen-label="Hero" data-comment-anchor="ddecb2ae01-section">
+    <!-- Box 1: research topic + clock -->
+    <div class="run-box" data-screen-label="Run">
+      <div class="run-body">
+        <div class="run-topic">
+          <div class="eyebrow">researching</div>
+          <h1 class="task-h1" id="task-title">What are the top pain points of the AI age?</h1>
+          <!-- Phase rail (under topic, in topic column) -->
+          <div class="phase-rail-wrap">
+            <div class="phase-rail" id="phase-rail" data-comment-anchor="5cb51465db-div">
+              <div class="pcell is-done" data-phase="breadth">
+                <div class="fill"></div>
+                <div class="pcell-label">Breadth</div>
+                <div class="pcell-range">0 — 30%</div>
+              </div>
+              <div class="pcell is-active" data-phase="depth">
+                <div class="fill"></div>
+                <div class="pcell-label">Depth</div>
+                <div class="pcell-range">30 — 80%</div>
+              </div>
+              <div class="pcell" data-phase="synthesis">
+                <div class="fill"></div>
+                <div class="pcell-label">Synthesis</div>
+                <div class="pcell-range">80 — 100%</div>
+              </div>
+              <div class="pmarker" id="phase-marker" style="left: 44%"></div>
+            </div>
+          </div>
+        </div>
+        <div class="run-clock">
+          <div class="eyebrow">remaining</div>
+          <div class="clock-big">
+            <span id="clock-h">02</span><span class="u">h</span>
+            <span id="clock-m">47</span><span class="u">m</span>
+            <span id="clock-s">12</span><span class="u">s</span>
+          </div>
+          <div class="clock-meta">
+            <div><span>elapsed</span><b id="clock-elapsed">02:12:48</b></div>
+            <div><span>deadline</span><b id="clock-deadline">19:13</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Box 2: currently asking -->
+    <div class="q-box" data-screen-label="Now working">
+      <div class="q-main q-swap" id="q-main">
+        <div class="eyebrow">currently asking</div>
+        <div class="now-q" id="now-question">What does GDPR say about AI training data?</div>
+        <div class="q-parent-link" id="q-parent-link">
+          <span class="pl-arrow">↳ from</span>
+          <span class="pl-text" id="parent-text">top-level question</span>
+        </div>
+      </div>
+      <div class="q-wheel-col">
+        <div class="pipe-cards" id="pipe-cards"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS ROW -->
+  <section class="stats-row" data-screen-label="Stats">
+    <div class="stat">
+      <div class="stat-label">Facts collected</div>
+      <div class="stat-row">
+        <div class="stat-value" id="stat-facts-val">287</div>
+        <div class="stat-delta">+34 / 30m</div>
+      </div>
+      <svg class="stat-spark" viewBox="0 0 100 24" preserveAspectRatio="none" id="spark-facts"></svg>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Dedupe rate</div>
+      <div class="stat-row">
+        <div class="stat-value" id="stat-dedupe-val">31%</div>
+        <div class="stat-delta is-warn">31% dropped</div>
+      </div>
+      <svg class="stat-spark" viewBox="0 0 100 24" preserveAspectRatio="none" id="spark-dedupe"></svg>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Scrape success</div>
+      <div class="stat-row">
+        <div class="stat-value" id="stat-scrape-val">88%</div>
+        <div class="stat-delta">+2.1%</div>
+      </div>
+      <svg class="stat-spark" viewBox="0 0 100 24" preserveAspectRatio="none" id="spark-scrape"></svg>
+    </div>
+    <div class="stat">
+      <div class="stat-label">LLM tokens</div>
+      <div class="stat-row">
+        <div class="stat-value" id="stat-tokens-val">1.8M</div>
+        <div class="stat-delta is-muted">~$4.20</div>
+      </div>
+      <svg class="stat-spark" viewBox="0 0 100 24" preserveAspectRatio="none" id="spark-tokens"></svg>
+    </div>
+  </section>
+
+  <!-- LOWER ROW -->
+  <section class="lower-row">
+    <!-- Frontier -->
+    <div class="panel" data-screen-label="Frontier queue">
+      <div class="panel-head">
+        <div class="panel-title">Frontier<span class="count" id="queue-count">17 pending</span></div>
+        <div class="panel-actions">
+          <span class="chip is-on" data-q-filter="active">active</span>
+          <span class="chip" data-q-filter="all">all</span>
+        </div>
+      </div>
+      <div class="frontier" id="frontier-list"></div>
+    </div>
+
+    <!-- Facts -->
+    <div class="panel" data-screen-label="Facts feed">
+      <div class="panel-head">
+        <div class="panel-title">Facts<span class="count" id="facts-count">+22 in last iter</span></div>
+        <div class="panel-actions">
+          <span class="chip is-on">recent</span>
+          <span class="chip">by topic</span>
+        </div>
+      </div>
+      <div class="facts" id="facts"></div>
+    </div>
+  </section>
+
+  <!-- EVENT LOG -->
+  <section class="log-card" data-screen-label="Event log">
+    <div class="log-head">
+      <div class="panel-title">Live event stream</div>
+      <div class="log-filters" id="log-filters">
+        <span class="chip is-on" data-fam="all">All</span>
+        <span class="chip" data-fam="llm"><span class="dot" style="background: var(--k-llm)"></span>llm</span>
+        <span class="chip" data-fam="search"><span class="dot" style="background: var(--k-search)"></span>search</span>
+        <span class="chip" data-fam="scrape"><span class="dot" style="background: var(--k-scrape)"></span>scrape</span>
+        <span class="chip" data-fam="fact"><span class="dot" style="background: var(--k-fact)"></span>fact</span>
+        <span class="chip" data-fam="frontier"><span class="dot" style="background: var(--k-frontier)"></span>frontier</span>
+        <span class="chip" data-fam="phase"><span class="dot" style="background: var(--k-phase)"></span>phase</span>
+      </div>
+      <div class="log-status">
+        <span id="log-rate">~ 14 ev/s</span>
+        <span class="log-pause-indicator">· paused (hover)</span>
+      </div>
+    </div>
+    <div class="log" id="log"></div>
+  </section>
+
+  <!-- SYNTHESIS PANEL -->
+  <section class="synth" id="synth">
+    <div>
+      <div class="eyebrow" style="color: var(--phase-synthesis)">Synthesis · phase 3 of 3</div>
+      <h2 class="synth-h">Clustering 287 claims into themes.</h2>
+      <p class="synth-sub">Search is closed. Sheldon is grouping evidence by topic and writing report sections one at a time.</p>
+      <div class="clusters" id="clusters"></div>
+    </div>
+    <div>
+      <div class="panel-title" style="margin-bottom: 14px;">Report sections</div>
+      <div class="sections" id="sections"></div>
+      <div id="report-ready" style="display:none; margin-top: 18px; padding: 18px 20px; background: var(--bg-2); border: 1px solid var(--phase-synthesis); border-radius: var(--r-lg);">
+        <div class="eyebrow" style="color: var(--phase-synthesis); margin-bottom: 6px;">Report ready</div>
+        <div style="font-size: 18px; color: var(--fg-0); font-weight: 500; letter-spacing: -0.01em;">report.md · 47 KB · 6 sections · 142 citations</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = sel => document.querySelector(sel);
+const $$ = sel => document.querySelectorAll(sel);
+
+// ----- state (populated by REST snapshots; rendered by the design's helpers) -----
+const RUN = {
+  task: null,
+  startedAt: null,
+  deadlineAt: null,
+  endedAt: null,           // set on phase='done'; freezes the clock at this moment
+  phase: "idle",
+  iterations: 0,
+  factsAdded: 0,
+};
+let FRONTIER = [];
+let FACTS = [];
+let STATS = {
+  factsCollected: 0,
+  dedupeRate: 0,
+  scrapeSuccess: 0,
+  llmTokens: 0,
+  sparks: { facts: [], dedupe: [], scrape: [], tokens: [] },
+};
+
+function totalDur() { return (RUN.deadlineAt && RUN.startedAt) ? (RUN.deadlineAt - RUN.startedAt) : 1; }
+function nowOrFrozen() {
+  // Freeze "current time" at the run's end timestamp once the agent finished.
+  return (RUN.phase === "done" && RUN.endedAt) ? RUN.endedAt : Date.now();
+}
+function pctElapsed() {
+  if (!RUN.deadlineAt || !RUN.startedAt) return 0;
+  return Math.min(1, Math.max(0, (nowOrFrozen() - RUN.startedAt) / totalDur()));
+}
+
+const TOPIC_HUES = [240, 175, 85, 35, 305, 145];
+function hueFor(tag) { let h = 0; for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0; return TOPIC_HUES[h % TOPIC_HUES.length]; }
+
+const KIND_FAM = {
+  "llm.fast":"llm","llm.deep":"llm","search.query":"search",
+  "scrape.fetch":"scrape","scrape.skip":"scrape",
+  "chunk.split":"chunk","embed.batch":"embed","claim.extract":"claim",
+  "fact.write":"fact","fact.dedupe":"fact",
+  "frontier.seed":"frontier","frontier.push":"frontier","frontier.pop":"frontier","frontier.dedupe":"frontier","frontier.done":"frontier","frontier.skip":"frontier",
+  "iteration.start":"iteration","iteration.end":"iteration",
+  "phase.transition":"phase","run.start":"phase","run.end":"phase",
+  "cluster.computed":"cluster","section.written":"section","report.written":"report",
+  "resume.detected":"resume","resume.applied":"resume",
+};
+
+const events = [];
+const LOG_MAX = 200;
+let logPaused = false;
+let activeFamily = "all";
+let evRateWindow = []; // ts of recent events for ev/s calculation
+
+function pushEvent(ev) {
+  events.unshift(ev);
+  if (events.length > LOG_MAX) events.pop();
+  evRateWindow.push(Date.now());
+  while (evRateWindow.length > 100) evRateWindow.shift();
+  appendLine(ev);
+  // pipeline staircase advances on family changes
+  driveStaircase(ev);
+}
+function fmtTs(ts) {
+  const d = (typeof ts === "number") ? new Date(ts) : new Date(ts);
+  return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2,"0")).join(":");
+}
+function lineHtml(e) {
+  const fam = KIND_FAM[e.kind] || "iteration";
+  const dur = e.durationMs == null ? "" : (e.durationMs >= 1000 ? (e.durationMs/1000).toFixed(2)+"s" : e.durationMs+"ms");
+  return `<div class="log-line is-entering" data-fam="${fam}" ${e.error ? 'data-error' : ''}>
+    <span class="ts">${fmtTs(e.ts)}</span>
+    <span class="layer">${e.layer || ""}</span>
+    <span class="kind">${e.kind}</span>
+    <span class="summary">${escapeHtml(e.summary || "")}</span>
+    <span class="dur">${dur}</span>
+  </div>`;
+}
+function renderLog() {
+  const log = $("#log");
+  const filtered = (activeFamily === "all" ? events : events.filter(e => KIND_FAM[e.kind] === activeFamily)).slice(0, 80);
+  log.innerHTML = filtered.map(lineHtml).join("");
+  log.querySelectorAll(".log-line").forEach(el => el.classList.remove("is-entering"));
+}
+function appendLine(ev) {
+  if (logPaused) return;
+  const fam = KIND_FAM[ev.kind] || "iteration";
+  if (activeFamily !== "all" && fam !== activeFamily) return;
+  const log = $("#log");
+  const wasAtTop = log.scrollTop < 8;
+  const tmp = document.createElement("div");
+  tmp.innerHTML = lineHtml(ev);
+  const node = tmp.firstElementChild;
+  log.insertBefore(node, log.firstChild);
+  while (log.children.length > 80) {
+    const last = log.lastElementChild;
+    last.style.transition = "opacity 300ms ease, max-height 300ms ease";
+    last.style.opacity = "0";
+    last.style.maxHeight = "0";
+    last.style.padding = "0";
+    setTimeout(() => last.remove(), 320);
+    break;
+  }
+  if (wasAtTop) log.scrollTop = 0;
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function renderFrontier() {
+  const showAll = $('.chip[data-q-filter="all"]')?.classList.contains("is-on");
+  const all = FRONTIER.slice().sort((a,b) => {
+    const order = {"in-progress":0, "pending":1, "done":2, "skipped":3};
+    if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
+    return b.score - a.score;
+  });
+  const list = $("#frontier-list");
+  list.innerHTML = "";
+  let lastStatus = null;
+  for (const q of all) {
+    if (!showAll && (q.status === "done" || q.status === "skipped")) continue;
+    if (q.status !== lastStatus && (q.status === "done" || q.status === "skipped")) {
+      const div = document.createElement("div");
+      div.className = "frontier-section";
+      div.innerHTML = `<span>${q.status === "done" ? "Completed" : "Skipped"}</span><span>${all.filter(x=>x.status===q.status).length}</span>`;
+      list.appendChild(div);
+      lastStatus = q.status;
+    }
+    const tree = q.depth > 0 ? "└" + "─".repeat(Math.min(q.depth,3)) : "";
+    const row = document.createElement("div");
+    row.className = "q";
+    row.dataset.status = q.status;
+    row.innerHTML = `
+      <div class="q-rank">${q.id}</div>
+      <div class="q-status"></div>
+      <div class="q-text-wrap">
+        ${tree ? `<span class="q-tree">${tree}</span>` : ""}
+        <span class="q-text">${escapeHtml(q.q)}</span>
+      </div>
+      <div class="q-tail">
+        ${q.status === "done" ? `<span style="color:var(--fg-3)">+${q.factsAdded}f</span>` : ""}
+        <div class="q-score-bar" style="--w:${Math.round(q.score*100)}%"></div>
+        <span class="q-score">${q.score.toFixed(2)}</span>
+      </div>
+    `;
+    list.appendChild(row);
+  }
+  const pending = FRONTIER.filter(q=>q.status==="pending").length;
+  $("#queue-count").textContent = `${pending} pending`;
+}
+
+function factHtml(f, entering) {
+  return `<div class="fact${entering ? ' is-entering' : ''}" data-fid="${f.id}">
+    <div class="fact-meta">
+      <span class="fact-id">#${f.id}</span>
+      <span class="fact-conf">
+        <span style="color:var(--fg-2)">${f.conf.toFixed(2)}</span>
+        <span class="conf-bar" style="--w:${Math.round(f.conf*100)}%"></span>
+      </span>
+      <span>${fmtTs(f.ts)}</span>
+    </div>
+    <div class="fact-body">
+      <div class="fact-claim">${escapeHtml(f.claim)}</div>
+      <div class="fact-foot">
+        <span class="topic" style="--h:${hueFor(f.topic || 'misc')}">${f.topic || 'misc'}</span>
+        <a class="src" href="${f.url}" target="_blank" rel="noopener"><span class="domain">${f.site || ''}</span> · ${escapeHtml(f.title || '')}</a>
+      </div>
+    </div>
+  </div>`;
+}
+function renderFacts() {
+  $("#facts").innerHTML = FACTS.slice(0, 18).map(f => factHtml(f, false)).join("");
+}
+
+function pad(n) { return String(n).padStart(2,"0"); }
+function tickClock() {
+  if (RUN.phase === "idle" || !RUN.deadlineAt || !RUN.startedAt) return;
+  const t = nowOrFrozen();
+  const remaining = Math.max(0, RUN.deadlineAt - t);
+  $("#clock-h").textContent = pad(Math.floor(remaining/3600000));
+  $("#clock-m").textContent = pad(Math.floor(remaining/60000) % 60);
+  $("#clock-s").textContent = pad(Math.floor(remaining/1000) % 60);
+  const elapsed = Math.max(0, t - RUN.startedAt);
+  $("#clock-elapsed").textContent = `${pad(Math.floor(elapsed/3600000))}:${pad(Math.floor(elapsed/60000)%60)}:${pad(Math.floor(elapsed/1000)%60)}`;
+  const dl = new Date(RUN.deadlineAt);
+  $("#clock-deadline").textContent = `${pad(dl.getHours())}:${pad(dl.getMinutes())}`;
+  const sd = new Date(RUN.startedAt);
+  $("#started-at").textContent = `${pad(sd.getHours())}:${pad(sd.getMinutes())}`;
+  const pct = pctElapsed() * 100;
+  $("#phase-marker").style.left = pct + "%";
+  const fills = $$(".pcell .fill");
+  if (fills.length === 3) {
+    fills[0].style.transform = `scaleX(${Math.min(1, pct/30)})`;
+    fills[1].style.transform = `scaleX(${Math.max(0, Math.min(1, (pct-30)/50))})`;
+    fills[2].style.transform = `scaleX(${Math.max(0, Math.min(1, (pct-80)/20))})`;
+  }
+}
+
+function setPhase(phase) {
+  if (RUN.phase === phase) return;
+  RUN.phase = phase;
+  document.body.dataset.phase = phase;
+  const cells = $$(".pcell");
+  cells.forEach(c => {
+    c.classList.remove("is-active", "is-done");
+    const p = c.dataset.phase;
+    const order = ["breadth","depth","synthesis"];
+    if (order.indexOf(p) < order.indexOf(phase)) c.classList.add("is-done");
+    else if (p === phase) c.classList.add("is-active", "swoop");
+  });
+  if (phase === "synthesis") renderSynth();
+}
+
+function makeSpark(id, data, color) {
+  const svg = document.getElementById(id);
+  if (!svg) return;
+  const w = 100, h = 24;
+  if (!data || data.length === 0) { svg.innerHTML = ""; return; }
+  const max = Math.max(...data), min = Math.min(...data);
+  const range = max - min || 1;
+  const pts = data.map((v,i) => `${((i/Math.max(1,data.length-1))*w).toFixed(1)},${(h - ((v-min)/range)*(h-3) - 1.5).toFixed(1)}`).join(" ");
+  const last = data[data.length-1] || 0;
+  const lastY = h - ((last-min)/range)*(h-3) - 1.5;
+  svg.innerHTML = `
+    <polyline fill="none" stroke="${color}" stroke-width="1.2" points="${pts}" />
+    <polyline fill="${color}" fill-opacity="0.08" stroke="none" points="0,${h} ${pts} ${w},${h}" />
+    <circle cx="${w}" cy="${lastY}" r="1.8" fill="${color}" />
+  `;
+}
+function renderStats() {
+  $("#stat-facts-val").textContent = STATS.factsCollected;
+  $("#stat-dedupe-val").textContent = (STATS.dedupeRate*100).toFixed(0) + "%";
+  $("#stat-scrape-val").textContent = (STATS.scrapeSuccess*100).toFixed(0) + "%";
+  const tk = STATS.llmTokens;
+  $("#stat-tokens-val").textContent = tk >= 1e6 ? (tk/1e6).toFixed(1) + "M"
+    : tk >= 1e3 ? (tk/1e3).toFixed(1) + "k"
+    : String(tk);
+  makeSpark("spark-facts",  STATS.sparks.facts,  "oklch(0.82 0.13 175)");
+  makeSpark("spark-dedupe", STATS.sparks.dedupe, "oklch(0.80 0.10 75)");
+  makeSpark("spark-scrape", STATS.sparks.scrape, "oklch(0.78 0.10 155)");
+  makeSpark("spark-tokens", STATS.sparks.tokens, "oklch(0.74 0.06 260)");
+}
+
+// ----- pipeline staircase: advance on event-family transitions -----
+const STEPS = [
+  { key: "search",  fams: ["search"] },
+  { key: "scrape",  fams: ["scrape"] },
+  { key: "extract", fams: ["chunk","embed","claim","fact"] },
+  { key: "propose", fams: ["frontier","iteration"] },
+];
+const STEP_VALS = { search: "—", scrape: "—", extract: "—", propose: "—" };
+let activeStepIdx = -1;
+
+function buildPipe() {
+  const root = document.getElementById("pipe-cards");
+  if (!root || root.dataset.built) return;
+  STEPS.forEach((s, i) => {
+    const card = document.createElement("div");
+    card.className = "pipe-card is-pending";
+    card.dataset.step = s.key;
+    card.innerHTML = `
+      <div class="pipe-card-head">
+        <span class="pc-num">${i + 1}</span>
+        <span class="pc-dot">·</span>
+        <span class="pc-name">${s.key.toUpperCase()}</span>
+      </div>
+      <div class="pipe-card-val" data-val>—</div>
+    `;
+    root.appendChild(card);
+  });
+  root.dataset.built = "1";
+}
+
+function setActiveStep(idx) {
+  if (idx === activeStepIdx) return;
+  activeStepIdx = idx;
+  STEPS.forEach((s, i) => {
+    const card = document.querySelector(`.pipe-card[data-step="${s.key}"]`);
+    if (!card) return;
+    card.classList.remove("is-active","is-done","is-pending");
+    if (i < idx) card.classList.add("is-done");
+    else if (i === idx) card.classList.add("is-active");
+    else card.classList.add("is-pending");
+    const v = card.querySelector("[data-val]");
+    if (v) v.textContent = STEP_VALS[s.key] || "—";
+  });
+}
+
+function driveStaircase(ev) {
+  const fam = KIND_FAM[ev.kind] || "";
+  // Update step values opportunistically.
+  if (ev.kind === "search.query" && ev.summary) {
+    const m = ev.summary.match(/(\d+)\s+hits/);
+    if (m) STEP_VALS.search = m[1];
+  }
+  if (ev.kind === "scrape.fetch" || ev.kind === "scrape.skip") {
+    // Best-effort running total over recent buffer
+    let ok = 0, total = 0;
+    for (const e of events.slice(0, 30)) {
+      if (e.kind === "scrape.fetch") { ok++; total++; }
+      else if (e.kind === "scrape.skip") { total++; }
+    }
+    STEP_VALS.scrape = total > 0 ? `${ok}/${total}` : "—";
+  }
+  if (ev.kind === "claim.extract" && ev.summary) {
+    const m = ev.summary.match(/(\d+)\s+claims/);
+    if (m) STEP_VALS.extract = m[1] + " claims";
+  }
+  if (ev.kind === "iteration.end" && ev.summary) {
+    const m = ev.summary.match(/\+(\d+)\s+q/);
+    if (m) STEP_VALS.propose = m[1] + " new";
+  }
+  // Advance step pointer based on family.
+  for (let i = 0; i < STEPS.length; i++) {
+    if (STEPS[i].fams.includes(fam)) { setActiveStep(i); break; }
+  }
+  // Flush values into the active card display.
+  const card = document.querySelector(".pipe-card.is-active");
+  if (card) {
+    const v = card.querySelector("[data-val]");
+    if (v) v.textContent = STEP_VALS[card.dataset.step] || "—";
+  }
+}
+
+// ----- now-question swap on iteration.start / frontier.pop -----
+let lastQId = null;
+function applyNowQuestionFromState() {
+  const inProg = FRONTIER.find(q => q.status === "in-progress");
+  if (!inProg) {
+    if (RUN.phase === "idle") return;
+    return;
+  }
+  if (inProg.id === lastQId) return;
+  lastQId = inProg.id;
+  const qMain = $("#q-main");
+  const nq = $("#now-question");
+  qMain.classList.add("is-swapping");
+  setTimeout(() => {
+    nq.textContent = inProg.q;
+    const pl = $("#q-parent-link");
+    const pt = $("#parent-text");
+    if (inProg.parent) {
+      const p = FRONTIER.find(q => q.id === inProg.parent);
+      pt.textContent = p ? p.q : "—";
+      pl.classList.remove("is-empty");
+    } else {
+      pt.textContent = "top-level question";
+      pl.classList.add("is-empty");
+    }
+    qMain.classList.remove("is-swapping");
+  }, 240);
+}
+
+// ----- synthesis section (placeholder rendering until /api/sections lands) -----
+function renderSynth() {
+  $("#clusters").innerHTML = `<div style="position:absolute; inset:20px; display:flex; align-items:center; justify-content:center; color:var(--fg-3); font-family:var(--font-mono); font-size:11px;">clusters forming…</div>`;
+  $("#sections").innerHTML = `<div style="color:var(--fg-3); font-family:var(--font-mono); font-size:11px; padding:14px;">sections will appear as they're written.</div>`;
+}
+
+// ----- snapshot polling + SSE -----
+let inFlightRunState = false;
+let inFlightFrontier = false;
+let inFlightFacts = false;
+let inFlightStats = false;
+
+async function pollRunState() {
+  if (inFlightRunState) return;
+  inFlightRunState = true;
+  try {
+    const r = await fetch("/api/run-state");
+    if (!r.ok) return;
+    const s = await r.json();
+    RUN.task = s.task;
+    RUN.startedAt = s.startedAt;
+    RUN.deadlineAt = s.deadlineAt;
+    RUN.endedAt = s.endedAt ?? null;
+    RUN.iterations = s.iterations || 0;
+    RUN.factsAdded = s.factsAdded || 0;
+    setPhase(s.phase || "idle");
+    if (s.task) $("#task-title").textContent = s.task;
+    const ri = $("#run-id");
+    if (ri && s.startedAt) ri.textContent = "r-" + Number(s.startedAt).toString(36).slice(-6).toUpperCase();
+    tickClock();
+  } catch {} finally { inFlightRunState = false; }
+}
+
+async function pollFrontier() {
+  if (inFlightFrontier) return;
+  inFlightFrontier = true;
+  try {
+    const r = await fetch("/api/frontier");
+    if (!r.ok) return;
+    FRONTIER = await r.json();
+    renderFrontier();
+    applyNowQuestionFromState();
+  } catch {} finally { inFlightFrontier = false; }
+}
+
+async function pollFacts() {
+  if (inFlightFacts) return;
+  inFlightFacts = true;
+  try {
+    const r = await fetch("/api/facts?limit=20");
+    if (!r.ok) return;
+    FACTS = await r.json();
+    renderFacts();
+  } catch {} finally { inFlightFacts = false; }
+}
+
+async function pollStats() {
+  if (inFlightStats) return;
+  inFlightStats = true;
+  try {
+    const r = await fetch("/api/stats");
+    if (!r.ok) return;
+    STATS = await r.json();
+    renderStats();
+  } catch {} finally { inFlightStats = false; }
+}
+
+function connectLive() {
+  const es = new EventSource("/api/events");
+  es.onmessage = (e) => {
+    if (!e.data) return;
+    try {
+      const ev = JSON.parse(e.data);
+      pushEvent({ ts: ev.ts || Date.now(), kind: ev.kind, layer: ev.layer || "", durationMs: ev.durationMs, summary: ev.summary || "", error: !!ev.error });
+    } catch {}
+  };
+  es.onerror = () => { /* browser will retry automatically */ };
+}
+
+function tickEvRate() {
+  const now = Date.now();
+  evRateWindow = evRateWindow.filter(t => now - t <= 10_000);
+  const rate = evRateWindow.length / 10;
+  const el = $("#log-rate");
+  if (el) el.textContent = `~ ${rate.toFixed(1)} ev/s`;
+}
+
+// ----- handlers (chips) -----
+$("#log-filters").addEventListener("click", e => {
+  const chip = e.target.closest(".chip");
+  if (!chip) return;
+  $$("#log-filters .chip").forEach(c => c.classList.remove("is-on"));
+  chip.classList.add("is-on");
+  activeFamily = chip.dataset.fam;
+  renderLog();
+});
+const logEl = $("#log");
+logEl.addEventListener("mouseenter", () => { logPaused = true; document.querySelector(".log-pause-indicator").style.display = "inline"; });
+logEl.addEventListener("mouseleave", () => { logPaused = false; document.querySelector(".log-pause-indicator").style.display = "none"; renderLog(); });
+$$('.chip[data-q-filter]').forEach(c => c.addEventListener("click", () => {
+  $$('.chip[data-q-filter]').forEach(x => x.classList.remove("is-on"));
+  c.classList.add("is-on"); renderFrontier();
+}));
+
+// ----- bootstrap -----
+buildPipe();
+renderLog();
+renderStats();
+(async () => {
+  await pollRunState();
+  await Promise.all([pollFrontier(), pollFacts(), pollStats()]);
+  connectLive();
+  setInterval(pollRunState, 2000);
+  setInterval(pollFrontier, 2000);
+  setInterval(pollFacts, 5000);
+  setInterval(pollStats, 5000);
+  setInterval(tickClock, 1000);
+  setInterval(tickEvRate, 1000);
+})();
+</script>
+
+<!--
+v2 LAYOUT NOTES
+
+Composition: golden-section grid throughout. Hero (61.8%) + clock sidebar (38.2%) on top — the running question is the dominant focal element, scaled to ~28px and given breathing room. Clock anchors the right at a smaller scale; the phase rail spans the full width below as a single horizontal element, restoring symmetry. Stats are a horizontal row of four equal columns. Lower row inverts the golden ratio (38.2 / 61.8) so the facts feed dominates and the frontier is the supporting voice. Event log is full-width, thin, and visually quieter — a pedestal under the page.
+
+Rhythm: 24px gutters everywhere; outer padding 40px; baseline at 4px. Type sizes follow a 13/14/16/18/22/26/28/44 scale, all on the baseline. Borders are single 1px lines at low opacity; no double-borders, no rounded chiclets stacked together. Each panel gets a single internal divider rule under its title — establishes visual hierarchy without nesting boxes.
+
+Color: same dark warm-cool neutrals as v1, single cyan-green accent. Phase tints used only on phase-related chrome.
+-->
+</body>
+</html>
