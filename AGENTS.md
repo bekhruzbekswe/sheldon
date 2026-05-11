@@ -21,7 +21,7 @@ The agent maintains two tables in SQLite — a **frontier queue** (questions to 
 - **LLM context is 32k tokens** — 24k usable per call after system + thinking + output budget. Hundreds of small focused calls beat one big call.
 - **State lives in SQLite, not in chat history** — the LLM is stateless across iterations. It only sees what the current step needs.
 - **LLM never sees raw web pages** — pages are chunked (~400 tok) and embedding-reranked before hitting any prompt.
-- **Two LLM modes**: `fast()` (no thinking, sub-second, used for ~all calls including L6 synthesis) and `deep()` (thinking on, currently unused at runtime — Qwen3.5-9B in deep mode consumed its full output budget on reasoning and returned 0 content tokens during L6 synthesis. Documented workarounds live in `docs/layers/L6-synthesis.md` and `openspec/specs/section-writer/spec.md`).
+- **Two LLM modes**: `fast()` (no thinking, sub-second, used for ~all calls including L6 synthesis) and `deep()` (thinking on, currently unused at runtime — Qwen3.5-9B in deep mode consumed its full output budget on reasoning and returned 0 content tokens during L6 synthesis. Documented workarounds live in `docs/architecture.md` (L0 + L6 sections) and `openspec/specs/section-writer/spec.md`).
 - **The LLM endpoint requires a browser User-Agent** (`Mozilla/5.0`). Cloudflare blocks the OpenAI SDK's default UA. Always set `defaultHeaders` or use plain `fetch`.
 
 ## Codebase map
@@ -30,14 +30,37 @@ For a navigable reference of every module, the L0–L8 layer mapping, data-flow 
 
 ## Working in this repo
 
-OpenSpec is the source of truth for tasks, decisions, and architecture **for layers that have shipped or are actively in flight**. Future layers live in `docs/layers/` until promoted.
+### The five artifacts and what each owns
 
-- **In-flight work** (one or two at a time): `openspec/changes/<change-name>/` — has `proposal.md` (why), `design.md` (how), `specs/` (capability deltas), and `tasks.md` (the actual checklist).
-- **Stable specs**: `openspec/specs/<capability>/spec.md` — what the system *currently does*. Only true after a change is archived.
-- **Future layer plans**: `docs/layers/L*-*.md` — sketches of what each layer will do. **Not specs**, intentionally light. When you start a layer, read its doc for orientation, then run `/opsx:new <layer-name>` to scaffold the real openspec change. After archiving, leave the layer doc in place as historical context.
-- **Slash commands**: `/opsx:new`, `/opsx:apply`, `/opsx:archive`, `/opsx:continue`, `/opsx:explore`, `/opsx:verify`, `/opsx:status`, `/opsx:onboard`, etc.
+- **`docs/architecture.md`** — source of truth for **system shape**. What the layers are, how they fit, what the invariants are. Updated only when the *shape* changes (new layer, new cross-cutting rule, new data store). Rare.
+- **`openspec/specs/<capability>/spec.md`** — source of truth for **behavior**. Per-capability contract: what each module accepts, returns, persists. Granular. Updated by archiving openspec changes (auto-sync), not by hand-edit.
+- **`openspec/changes/<name>/`** — **the workspace**. Where in-flight work lives: proposal (why), design (how), specs delta (what changes contractually), tasks (the checklist). One change = one implementable unit.
+- **`openspec/changes/archive/<date>-<name>/`** — **history**. Frozen record of what shipped and when. The audit trail.
+- **`docs/initiatives/<name>.md`** — **intent, pre-openspec**. Bird's-eye write-up of a multi-change effort that hasn't been formalized yet. Optional — small work skips this and goes straight to openspec.
 
-When picking up work, run `openspec list` to see active changes, or `openspec status --change <name>` for artifact progress on a specific one.
+### How we work
+
+1. **New work shows up.** Decide one or many.
+   - One implementable unit (1–2 days, one capability touched) → skip to step 3.
+   - Multi-week effort touching several capabilities → write `docs/initiatives/<name>.md` first. Answers *why*, *what changes if it ships*, *out of scope*, *open questions*. Orientation, not spec.
+
+2. **Promote each implementable chunk to openspec.** `openspec new change <name>` (or `/opsx:new <name>`). Write proposal/design/specs-delta/tasks *against current reality* — the initiative doc is reference, not a copy source. The system may have moved since the doc was written.
+
+3. **Implement.** `/opsx:apply <name>` walks the tasks; mark each `[x]` as it lands. Pause on ambiguity, don't guess.
+
+4. **Validate.** `openspec validate <name>` (or `/opsx:verify`) before archiving. A spec that doesn't pass validation will mislead future sessions. Also run `bun run typecheck`.
+
+5. **Ship.** `/opsx:archive <name>` syncs the specs delta into `openspec/specs/` (the spec is now true again) and moves the change to `archive/`. If the change came from an initiative doc, trim or delete the doc — its job is done.
+
+6. **If the system's shape changed,** update `docs/architecture.md`. This is rare and deliberate. Most changes don't move the shape — they refine behavior within it.
+
+### Decision points
+
+- *Initiative vs straight-to-openspec?* If you can write one `proposal.md` and one `tasks.md` for the whole thing, skip the initiative. If you need to sequence 3+ changes, write the initiative first.
+- *Update architecture.md or specs?* Architecture = "what kind of system is this." Specs = "what does this capability do." If you'd describe the change as "we have a new layer" or "we changed how layers interact," that's architecture. Otherwise it's specs.
+- *Initiative still relevant after preceding work shipped?* Re-read before promoting. If reality moved, rewrite or delete first. Stale planning docs are worse than no planning docs.
+
+When picking up work, run `openspec list` to see active changes, or `openspec status --change <name>` for artifact progress on a specific one. Slash commands: `/opsx:new`, `/opsx:apply`, `/opsx:archive`, `/opsx:continue`, `/opsx:explore`, `/opsx:verify`, `/opsx:status`, `/opsx:onboard`.
 
 ## Layer status
 

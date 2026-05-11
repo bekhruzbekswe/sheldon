@@ -1,7 +1,7 @@
-# S4 — Living hypothesis across iterations
+# Living hypothesis across iterations
 
-> **Status: deferred — re-evaluate after S1–S3.**
-> Highest-leverage idea in the original handoff (H3), but also the most architectural and the most uncertain. Don't build until S1–S3 ship and we can see what the gap actually looks like.
+> **Status: deferred — re-evaluate after v2 reports on a real task.**
+> Highest-leverage idea in the original handoff (H3), but also the most architectural and the most uncertain. v2 (S1–S3 + tuning) is shipped; revisit only if reports still feel like gather-then-summarize rather than analyst-grade.
 
 ## Why this stage exists (or might not need to)
 

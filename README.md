@@ -11,7 +11,8 @@ L8 complete. Sheldon now ships a friendly browser dashboard: `bun run dashboard`
 ## Getting oriented
 
 - **What this is and how it works**: see [`AGENTS.md`](./AGENTS.md).
-- **Forward-looking layer plans (L1–L8)**: [`docs/layers/`](./docs/layers/).
+- **Bird's-eye architecture (L0–L8 + v2 synthesis pipeline)**: [`docs/architecture.md`](./docs/architecture.md).
+- **Forward-looking initiatives (not yet promoted to openspec)**: [`docs/initiatives/`](./docs/initiatives/).
 - **Current change in flight**: `openspec list` (or `openspec view` for an interactive dashboard).
 - **Stable specs (built behaviors)**: `openspec/specs/`.
 - **Active proposals (in-flight work)**: `openspec/changes/`.
