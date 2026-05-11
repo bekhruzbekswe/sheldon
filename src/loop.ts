@@ -15,6 +15,7 @@ import { chunkText } from './chunker.ts';
 import { extractor } from './extract.ts';
 import { embedder } from './embed.ts';
 import { factStore } from './facts.ts';
+import { extractDomain, lookupSource, classifySource } from './classify.ts';
 
 const TOP_N = 3;
 const SUMMARY_PATH = '.sheldon/last-summary.md';
@@ -62,6 +63,12 @@ export async function indexSource(
   let factsAdded = 0;
   let claimsExtracted = 0;
   try {
+    // Classify the source's domain on first encounter (cached per-domain in the `sources` table).
+    const domain = extractDomain(source.url);
+    if (lookupSource(domain) === null) {
+      await classifySource(domain, source.text);
+    }
+
     const chunks = await chunkText(source.text, { sourceUrl: source.url });
     for (const chunk of chunks) {
       const claims = await extractor.extract(chunk.text, {

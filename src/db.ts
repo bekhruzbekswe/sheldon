@@ -49,13 +49,28 @@ export function getDb(): Database {
     CREATE INDEX IF NOT EXISTS idx_frontier_status_score ON frontier(status, score DESC);
 
     CREATE TABLE IF NOT EXISTS run_state (
-      id           INTEGER PRIMARY KEY CHECK (id = 1),
-      task         TEXT NOT NULL,
-      started_at   INTEGER NOT NULL,
-      deadline_at  INTEGER NOT NULL,
-      phase        TEXT NOT NULL
+      id              INTEGER PRIMARY KEY CHECK (id = 1),
+      task            TEXT NOT NULL,
+      started_at      INTEGER NOT NULL,
+      deadline_at     INTEGER NOT NULL,
+      phase           TEXT NOT NULL,
+      contract_json   TEXT,
+      task_embedding  BLOB
+    );
+
+    CREATE TABLE IF NOT EXISTS sources (
+      domain                 TEXT PRIMARY KEY,
+      source_type            TEXT,
+      promotional_intent     TEXT,
+      primary_vs_derivative  TEXT,
+      classified_at          INTEGER,
+      raw_label_json         TEXT
     );
   `);
+  // Idempotent column adds for upgrades from a v1 schema that pre-dates these columns.
+  // ALTER TABLE ADD COLUMN errors if the column exists; the catch makes it a no-op.
+  try { db.exec('ALTER TABLE run_state ADD COLUMN contract_json TEXT'); } catch {}
+  try { db.exec('ALTER TABLE run_state ADD COLUMN task_embedding BLOB'); } catch {}
   _db = db;
   return db;
 }

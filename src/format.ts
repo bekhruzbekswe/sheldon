@@ -88,6 +88,32 @@ export function formatEvent(ev: Event): string {
       const sim = num(pay.similarity);
       return `near-dup of #${num(pay.matchedId)} (sim ${sim.toFixed(2)}) · ${trunc(pay.claim, 50)}`;
     }
+    case 'fact.dropped.irrelevant': {
+      const score = num(pay.score);
+      const ts = num(pay.taskSimilarity);
+      const oos = num(pay.maxOosSimilarity);
+      return `score ${score.toFixed(3)} (task ${ts.toFixed(2)} − oos ${oos.toFixed(2)}) · ${trunc(pay.claim, 50)}`;
+    }
+    case 'source.classified': {
+      if (err) return `${trunc(pay.domain, 40)} · ${err}`;
+      const promo = pay.promotionalIntent ?? '?';
+      const prim = pay.primaryVsDerivative ?? '?';
+      return `${trunc(pay.domain, 40)} · ${pay.sourceType ?? '?'} · promo=${promo} · ${prim}`;
+    }
+    case 'contract.drafted': {
+      if (err) return `${err.slice(0, 80)}`;
+      return `subq=${num(pay.subQuestionCount)} · good=${num(pay.goodAnswerCount)} · oos=${num(pay.outOfScopeCount)}`;
+    }
+    case 'contract.revised': {
+      if (err) return `${pay.phaseTransition ?? '?'} · ${err.slice(0, 60)}`;
+      const removed = Array.isArray(pay.removed) ? pay.removed.length : 0;
+      const added = Array.isArray(pay.added) ? pay.added.length : 0;
+      return `${pay.phaseTransition ?? '?'} · -${removed} +${added}`;
+    }
+    case 'gap.analyzed': {
+      if (err) return `${pay.phaseTransition ?? '?'} · ${err.slice(0, 60)}`;
+      return `${pay.phaseTransition ?? '?'} · proposed=${num(pay.gapsProposed)} · pushed=${num(pay.gapsPushed)} · deduped=${num(pay.gapsDeduped)}`;
+    }
 
     case 'frontier.seed': {
       if (err) return `${err}`;
@@ -129,9 +155,36 @@ export function formatEvent(ev: Event): string {
     case 'cluster.computed': {
       return `k=${num(pay.k)} · ${num(pay.clusterCount)} clusters · sil ${num(pay.silhouette).toFixed(2)}`;
     }
+    case 'thesis.drafted': {
+      if (err) return `${err.slice(0, 80)}`;
+      return `claims=${num(pay.claimCount)} · slice=${num(pay.factSliceSize)} · cap=${num(pay.facts_per_domain_cap)}`;
+    }
+    case 'claim.triangulated': {
+      if (err) return `${trunc(pay.claimHeadline, 40)} · ${err}`;
+      const cor = num(pay.corroborations);
+      const con = num(pay.contradictions);
+      const contested = pay.contested ? ' contested' : '';
+      return `${trunc(pay.claimHeadline, 40)} · +${cor} / -${con}${contested} · q=${num(pay.queriesRan)}`;
+    }
+    case 'section.rubric': {
+      if (err) return `${trunc(pay.headline, 40)} · ${err}`;
+      const flags = [
+        pay.hasMechanism ? 'mech' : '·',
+        pay.hasExample ? 'ex' : '·',
+        pay.hasQuantification ? 'q' : '·',
+        pay.defendsHeading ? 'def' : '·',
+      ].join('|');
+      return `${trunc(pay.headline, 40)} · ${flags}`;
+    }
     case 'section.written': {
       if (err) return `${pay.label} · ${err}`;
       return `${pay.label} · ${num(pay.wordCount)}w · ${num(pay.citationCount)} cites`;
+    }
+    case 'section.dropped': {
+      return `${trunc(pay.headline, 40)} · ${trunc(pay.reason, 60)}`;
+    }
+    case 'synthesis.fallback': {
+      return `${pay.reason ?? '?'} · facts=${num(pay.factCount)}`;
     }
     case 'report.written': {
       return `${trunc(pay.path, 60)} · ${num(pay.sectionCount)} sections · ${fmtBytes(num(pay.bytes))}`;

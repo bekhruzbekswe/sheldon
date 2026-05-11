@@ -17,19 +17,33 @@ export type Followup = {
 export type ProposeContext = {
   originalTask: string;
   parentQuestion: string;
-  recentClaims: string[]; // truncated by caller; we further cap to 200 chars each
+  /**
+   * Task-relevance-sampled, source-diverse fact slice (S3 fresh-bias fix).
+   * Replaces the legacy `recentClaims` field. Caller must construct via
+   * `factStore.findSimilar(taskEmbedding, ...)` + per-domain cap. Falls back
+   * to recency-sorted slice if task embedding is unavailable.
+   */
+  taskRelevantClaims: string[];
   pendingTitles: string[]; // top-N pending frontier questions
+  /**
+   * Optional list of currently over-represented domains. When non-empty, the
+   * proposer's prompt includes a `<saturated_domains>` block and the system
+   * prompt instructs the model to bias toward angles likely to surface
+   * different sources. Hint, not hard filter.
+   */
+  saturatedDomains?: string[];
 };
 
 const SYSTEM_PROMPT = `You propose follow-up sub-questions for an autonomous research agent.
 
 RULES
-- Read the original research task, the question just answered, the recent claims found, and the questions already pending.
+- Read the original research task, the question just answered, the task-relevant claims found, and the questions already pending.
 - Propose 3-5 follow-up questions that meaningfully advance the research.
-- Each follow-up must be concrete (something a search engine can answer), distinct from anything in the pending list, and grounded in the recent claims.
-- If the recent claims contain nothing new or useful, return an empty list.
+- Each follow-up must be concrete (something a search engine can answer), distinct from anything in the pending list, and grounded in the task-relevant claims.
+- If the claims contain nothing new or useful, return an empty list.
 - For each follow-up include a relevance score in [0,1] reflecting how central it is to the original task, plus a one-line "why" explanation.
 - Do not include meta-questions ("what should we research next?"). Substance only.
+- If a <saturated_domains> block is present, the corpus is already over-represented by those domains. Bias your proposed questions toward angles likely to surface DIFFERENT sources (e.g., named industry players, regulators, academic studies, named analyst firms — whatever fits the task). Don't reject saturated domains entirely; just don't disproportionately produce questions that would obviously return more from the same domain.
 
 OUTPUT
 Return JSON: {"followups": [{"question": "...", "relevance": 0.X, "why": "..."}, ...]}.`;
@@ -65,7 +79,7 @@ function trunc(s: string, n: number): string {
 }
 
 function buildUserMessage(ctx: ProposeContext): string {
-  const claims = ctx.recentClaims
+  const claims = ctx.taskRelevantClaims
     .slice(0, 10)
     .map((c, i) => `(${i + 1}) ${trunc(c, 200)}`)
     .join('\n');
@@ -73,13 +87,19 @@ function buildUserMessage(ctx: ProposeContext): string {
     .slice(0, 5)
     .map((q, i) => `(${i + 1}) ${trunc(q, 120)}`)
     .join('\n');
-  return [
+  const parts = [
     `<original_task>${ctx.originalTask}</original_task>`,
     `<parent_question>${ctx.parentQuestion}</parent_question>`,
-    `<recent_claims>\n${claims || '(none)'}\n</recent_claims>`,
+    `<task_relevant_claims>\n${claims || '(none)'}\n</task_relevant_claims>`,
     `<pending_frontier>\n${pending || '(empty)'}\n</pending_frontier>`,
-    `Propose 3-5 distinct follow-ups now.`,
-  ].join('\n\n');
+  ];
+  if (ctx.saturatedDomains && ctx.saturatedDomains.length > 0) {
+    parts.push(
+      `<saturated_domains>\n${ctx.saturatedDomains.map((d) => `- ${d}`).join('\n')}\n</saturated_domains>`,
+    );
+  }
+  parts.push(`Propose 3-5 distinct follow-ups now.`);
+  return parts.join('\n\n');
 }
 
 function tryParseFollowups(content: string): Followup[] | null {

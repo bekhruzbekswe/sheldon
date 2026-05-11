@@ -7,6 +7,7 @@
 
 import { getDb } from './db.ts';
 import { events } from './events.ts';
+import { getTaskEmbedding, getOutOfScopeEmbeddings } from './contract.ts';
 
 export type FactInput = {
   claim: string;
@@ -35,6 +36,12 @@ export type FactRow = {
 export type SimilarFact = FactRow & { similarity: number };
 
 const DEDUPE_THRESHOLD = 0.95;
+// Empirically tuned from first-run telemetry: at T_DROP=0.05 the gate rejected 94% of
+// extracted claims because LLM-drafted out-of-scope items overlap heavily with legitimate
+// adjacent content (taskSim and maxOosSim both naturally land in 0.2-0.5 for MiniLM-L6).
+// Score distribution showed p25≈-0.10, p50≈-0.04, p90≈+0.03; -0.10 keeps clearly off-topic
+// content rejected (min observed -0.47) while admitting useful adjacent material.
+const T_DROP = -0.10;
 
 function floatArrToBuf(arr: Float32Array): Buffer {
   return Buffer.from(arr.buffer, arr.byteOffset, arr.byteLength);
@@ -92,6 +99,36 @@ function rowToFact(r: RawRow, includeEmbedding = false): FactRow {
 export const factStore = {
   async insert(input: FactInput): Promise<number | null> {
     const db = getDb();
+
+    // Relevance gate: drop facts whose claim embedding is far from the run's task,
+    // or close to one of the contract's out-of-scope items. Runs BEFORE the dedupe
+    // scan to avoid wasting an O(n) sweep on facts we'd drop anyway.
+    const taskEmb = getTaskEmbedding();
+    if (taskEmb) {
+      const taskSim = cosine(input.embedding, taskEmb);
+      const oosEmbeddings = await getOutOfScopeEmbeddings();
+      let maxOosSim = 0;
+      for (const oos of oosEmbeddings) {
+        const s = cosine(input.embedding, oos);
+        if (s > maxOosSim) maxOosSim = s;
+      }
+      const score = taskSim - maxOosSim;
+      if (score < T_DROP) {
+        await events.emit({
+          kind: 'fact.dropped.irrelevant',
+          layer: 'L3',
+          payload: {
+            claim: input.claim.slice(0, 80),
+            sourceUrl: input.sourceUrl,
+            taskSimilarity: Number(taskSim.toFixed(4)),
+            maxOosSimilarity: Number(maxOosSim.toFixed(4)),
+            score: Number(score.toFixed(4)),
+            threshold: T_DROP,
+          },
+        });
+        return null;
+      }
+    }
 
     // Dedupe check: brute-force cosine against existing rows.
     const existingRows = db

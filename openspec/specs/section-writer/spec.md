@@ -63,3 +63,144 @@ If the prose quality of `llm.fast`-generated sections is judged insufficient for
 - **THEN** none of the enhancements listed here are required for conformance
 - **AND** they MAY be implemented in a future change without breaking existing callers
 
+### Requirement: System prompt requires ranked thesis-led prose without transitional padding
+
+The `SECTION_SYSTEM_PROMPT` used by `writeSection` SHALL instruct the model to:
+
+1. **Open** with a single thesis sentence stating the section's claim. (Replaces the prior "framing" instruction.)
+2. **Body** must rank the supporting points by importance — most-load-bearing first.
+3. **Acknowledge contradictions** explicitly when sources disagree, citing both sides.
+4. **Hedge thin evidence**: when a claim is supported by fewer than 3 distinct facts or only one source, the prose MUST hedge ("Evidence is thin, but…" / "One source argues…") rather than asserting confidently.
+5. **Omit weakly-supported claims** entirely rather than paraphrasing weak evidence.
+6. **No closing transitional sentence**. The section ends on the body's final point, not on a meta-summary.
+7. The words `"Furthermore"`, `"Consequently"`, and `"Ultimately"` MUST NOT appear as the *first word* of any closing paragraph. (They MAY appear elsewhere in the body.)
+
+The system prompt MUST NOT include the sentence `"Open with a one-sentence framing of the section's theme. Close with a one-sentence transition or summary."` (from the v1 prompt). That instruction was the documented root cause of trailing-padding artifacts.
+
+The structural inputs to `writeSection` (a `(label, facts[], originalTask)` triple) are unchanged in S1. The cluster-to-claim inversion is S2's concern.
+
+#### Scenario: Generated section opens with thesis, not framing fluff
+
+- **WHEN** `writeSection({label, facts}, ctx)` returns a body for a non-trivial cluster
+- **THEN** the first sentence of the body asserts a specific claim relevant to `label`
+- **AND** the first sentence is not a generic framing like "This section explores…" or "Outsourcing companies face many challenges in the AI age."
+
+#### Scenario: Banned closer-words do not appear as paragraph openers
+
+- **WHEN** `writeSection(...)` returns a body
+- **THEN** no paragraph in the body has its first word equal to "Furthermore", "Consequently", or "Ultimately"
+
+#### Scenario: Old framing instruction is absent from prompt
+
+- **WHEN** the source of `sections.ts` is inspected
+- **THEN** the string `"Open with a one-sentence framing"` is NOT present in `SECTION_SYSTEM_PROMPT`
+- **AND** the string `"Close with a one-sentence transition"` is NOT present
+
+#### Scenario: Hedging instruction is present in the prompt
+
+- **WHEN** the source of `sections.ts` is inspected
+- **THEN** `SECTION_SYSTEM_PROMPT` contains language requiring the writer to hedge when a claim has fewer than 3 supporting facts or only single-source support
+
+### Requirement: writeSectionFromClaim defends a specific claim using ranked evidence
+
+The `writeSectionFromClaim(input, ctx, feedback?)` function SHALL accept:
+
+```ts
+{
+  claim: string,                  // the one-sentence claim to defend
+  headline: string,               // the H2 heading (3-8 plain English words)
+  rankedFacts: SectionFact[],     // top-K facts pre-sorted; index 0 is most load-bearing
+  triangulation: {
+    corroborations: number,
+    contradictions: number,
+    contested: boolean,
+  }
+}
+```
+
+…and a context `{originalTask}` plus an optional `feedback` string (used by the brutal-editor pass for the revision attempt), and return `{label: headline, body, factIds: number[], usedLocalIds: number[]}` (matching the existing `Section` shape so the stitcher consumes both functions identically).
+
+The system prompt SHALL instruct the model to:
+
+1. **Open** with a single thesis sentence asserting the *claim*. Do NOT hedge or qualify in the opening unless triangulation says so.
+2. **Body** must rank the supporting facts by importance — most load-bearing first. The `rankedFacts` array is already sorted; the prose ordering should follow it.
+3. **Cite** every factual claim with `[N]` matching `localId`. The fact-numbering rules from the legacy writer (filter out-of-range citations, retry-once on empty body) carry forward.
+4. **Triangulation directives**:
+   - If `corroborations >= 2 AND !contested`: assert the claim with normal confidence.
+   - If `corroborations < 2 OR rankedFacts.length < 3`: hedge ("Evidence is thin, but…", "One source argues…").
+   - If `contested === true`: explicitly surface the contention ("Sources disagree: X argues …, while Y reports …") and cite both sides.
+5. **Drop weak facts**: if a fact in `rankedFacts` doesn't actually support the claim on inspection, the model is instructed to OMIT it rather than paraphrase it.
+6. **No closing transitional sentence**. No "Furthermore"/"Consequently"/"Ultimately" as paragraph openers. (Same as the legacy rule; carried into the new function.)
+
+When `feedback` is supplied, it is appended to the user message inside an `<editor_feedback>` block — the brutal-editor pass uses this on revision attempts.
+
+The function MUST use `llm.fast` (no thinking). It MUST follow the existing two-attempt + filter-citations + word-count pattern. It MUST emit one `section.written` event on completion (same shape as the existing function).
+
+The legacy `writeSection(input, ctx)` function MUST remain in place for the cluster-fallback path. Its behaviour is unchanged.
+
+#### Scenario: Confident assertion when triangulation supports it
+
+- **GIVEN** triangulation `{corroborations: 4, contradictions: 0, contested: false}` and 8 ranked facts
+- **WHEN** `writeSectionFromClaim(...)` returns a body
+- **THEN** the body's first sentence asserts the claim without hedging language
+- **AND** the body does not contain "Evidence is thin"
+
+#### Scenario: Contested claim is explicitly flagged
+
+- **GIVEN** triangulation `{corroborations: 3, contradictions: 3, contested: true}`
+- **WHEN** `writeSectionFromClaim(...)` returns a body
+- **THEN** the body contains explicit language acknowledging contention (e.g., "Sources disagree", "is contested", "challenges this view")
+- **AND** facts are cited from both sides where possible
+
+#### Scenario: Thin evidence forces hedging
+
+- **GIVEN** `rankedFacts.length === 2` and `corroborations === 1`
+- **WHEN** `writeSectionFromClaim(...)` returns a body
+- **THEN** the body opens or contains a hedging phrase: "Evidence is thin", "One source argues", "Only one analyst reports", or similar
+
+#### Scenario: Feedback is used during revision
+
+- **GIVEN** a brutal-editor revision call passing `feedback = 'No concrete example named'`
+- **WHEN** `writeSectionFromClaim(input, ctx, feedback)` runs
+- **THEN** the user message sent to the LLM contains an `<editor_feedback>` block with the feedback string
+
+### Requirement: Banned-closer-words deterministic post-processor
+
+After a section body is returned by `writeSection` or `writeSectionFromClaim`, the system SHALL apply a deterministic post-processor `removeBannedClosers(body)` that rewrites the opening word of the **last paragraph** when that word is one of the banned closers.
+
+Banned set: `Furthermore`, `Consequently`, `Ultimately`. Match is case-sensitive and applies only when the word is at the very start of the last paragraph followed by a comma OR space-and-lowercase-letter (i.e., the model is opening a transitional sentence).
+
+When matched, the offending word is replaced by one of `As such,` / `In sum,` / `That is,` (rotating). The rest of the paragraph is unchanged.
+
+The post-processor MUST run AFTER `filterCitations` (so it doesn't accidentally move citation markers around) and BEFORE the body is included in the returned `Section.body`. Both `writeSection` (cluster fallback path) and `writeSectionFromClaim` (thesis path) MUST apply it.
+
+Mid-body uses of the banned words (i.e., not as the opener of the last paragraph) are NOT touched. The original prompt rule was scoped to closing paragraphs.
+
+> **Known limitation:** the regex matches the first word of the last *paragraph*. When a section is a single paragraph that ends with a transitional sentence (e.g., `"…Ultimately, the concept of human-in-the-loop has emerged as a central principle"`), the regex does not fire because `Ultimately` is mid-paragraph from the regex's perspective. Tracked as a future tune; broaden to first-word-of-last-sentence-in-closing-zone if real-task reports show recurrent single-paragraph violations.
+
+#### Scenario: Closing paragraph opening with "Ultimately" is rewritten
+
+- **GIVEN** a section body whose last paragraph starts with `"Ultimately, the lack of a stable pricing mechanism..."`
+- **WHEN** `removeBannedClosers(body)` runs
+- **THEN** the returned body's last paragraph starts with one of `"As such,"`, `"In sum,"`, or `"That is,"`
+- **AND** the rest of that paragraph is byte-identical to the input
+
+#### Scenario: Banned word in the middle of a paragraph is preserved
+
+- **GIVEN** a section body containing `"Consequently"` in the middle of a non-final paragraph
+- **WHEN** `removeBannedClosers(body)` runs
+- **THEN** the input paragraph is byte-identical to the output for that paragraph
+- **AND** only a final-paragraph opener is candidate for rewrite
+
+#### Scenario: No banned closer leaves body untouched
+
+- **GIVEN** a section body whose last paragraph starts with `"This shift forces a pivot..."`
+- **WHEN** `removeBannedClosers(body)` runs
+- **THEN** the returned body is byte-identical to the input
+
+#### Scenario: Both writeSection variants apply the post-processor
+
+- **WHEN** the source of `sections.ts` is inspected
+- **THEN** `writeSection(...)` calls `removeBannedClosers` on its filtered body before returning
+- **AND** `writeSectionFromClaim(...)` calls `removeBannedClosers` on its filtered body before returning
+

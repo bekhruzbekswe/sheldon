@@ -44,6 +44,9 @@
     --k-phase: oklch(0.80 0.11 50);
     --k-synthesis: oklch(0.80 0.11 75);
     --k-resume: oklch(0.74 0.06 260);
+    --k-source: oklch(0.80 0.12 340);
+    --k-contract: oklch(0.80 0.11 115);
+    --k-gap: oklch(0.80 0.13 25);
 
     --t-0: 240; --t-1: 175; --t-2: 85; --t-3: 35; --t-4: 305; --t-5: 145;
 
@@ -711,10 +714,12 @@
     gap: 24px;
     padding: 16px 0;
     border-bottom: 1px solid var(--line-soft);
-    overflow: hidden;
+    /* No max-height clamp — let content flow naturally. The grid columns
+       prevent horizontal overflow; vertical scrolling happens at .facts
+       (max-height: 540px, overflow-y: auto). */
   }
   .fact.is-entering {
-    animation: fact-in 700ms cubic-bezier(.2,.7,.2,1) both;
+    animation: fact-in 600ms cubic-bezier(.2,.7,.2,1);
   }
   .fact.is-leaving {
     animation: fact-out 400ms cubic-bezier(.4,0,.6,1) both;
@@ -743,6 +748,7 @@
     color: var(--fg-0); font-size: 14px; line-height: 1.5;
     margin-bottom: 10px; text-wrap: pretty;
     letter-spacing: -0.005em;
+    overflow-wrap: anywhere; word-break: break-word;
   }
   .fact-foot {
     display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
@@ -770,12 +776,11 @@
   .src:hover { color: var(--fg-1); }
   .src .domain { color: var(--fg-2); }
   @keyframes fact-in {
-    0% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; border-bottom-width: 0; }
-    40% { opacity: 0; max-height: 200px; padding-top: 16px; padding-bottom: 16px; border-bottom-width: 1px; }
-    100% { opacity: 1; max-height: 200px; padding-top: 16px; padding-bottom: 16px; border-bottom-width: 1px; }
+    0%   { opacity: 0; transform: translateY(-6px); }
+    100% { opacity: 1; transform: translateY(0); }
   }
   @keyframes fact-out {
-    0% { opacity: 1; max-height: 200px; }
+    0%   { opacity: 1; max-height: 600px; }
     100% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; border-bottom-width: 0; }
   }
 
@@ -894,7 +899,11 @@
   .log-line[data-fam="phase"] .kind { color: var(--k-phase); font-weight: 600; }
   .log-line[data-fam="cluster"] .kind,
   .log-line[data-fam="section"] .kind,
-  .log-line[data-fam="report"] .kind { color: var(--k-synthesis); font-weight: 600; }
+  .log-line[data-fam="report"] .kind,
+  .log-line[data-fam="synthesis"] .kind { color: var(--k-synthesis); font-weight: 600; }
+  .log-line[data-fam="source"] .kind { color: var(--k-source); }
+  .log-line[data-fam="contract"] .kind { color: var(--k-contract); font-weight: 600; }
+  .log-line[data-fam="gap"] .kind { color: var(--k-gap); font-weight: 600; }
   .log-line[data-error] {
     background: oklch(0.72 0.13 25 / 0.08);
     box-shadow: inset 2px 0 0 var(--err);
@@ -910,31 +919,170 @@
     100% { opacity: 1; max-height: 30px; padding: 1px 0; }
   }
 
-  /* ============ SYNTHESIS OVERLAY ============ */
+  /* ============ SYNTHESIS OVERLAY (single-column, staircase substeps) ============ */
   .synth { display: none; }
-  body[data-phase="synthesis"] .synth {
-    display: grid;
-    grid-template-columns: 1.2fr 1fr;
-    gap: 32px;
-    padding: 36px 40px;
-    background: linear-gradient(180deg, oklch(0.80 0.11 75 / 0.06), transparent 60%), var(--bg-1);
+  body[data-phase="synthesis"] .synth,
+  body[data-phase="done"] .synth {
+    display: block;
+    padding: 28px 32px;
+    background: var(--bg-1);
     border: 1px solid oklch(0.80 0.11 75 / 0.32);
     border-radius: var(--r-lg);
   }
   body[data-phase="synthesis"] .lower-row,
   body[data-phase="synthesis"] .stats-row { opacity: 0.5; pointer-events: none; }
-  .synth-h { font-size: 26px; font-weight: 500; color: var(--fg-0); margin: 8px 0 8px; letter-spacing: -0.02em; }
-  .synth-sub { color: var(--fg-2); margin-bottom: 24px; max-width: 56ch; }
-  .clusters { position: relative; min-height: 240px; }
-  .cluster {
-    position: absolute; border-radius: 50%;
-    background: oklch(0.80 0.11 var(--h, 75) / 0.12);
-    border: 1px solid oklch(0.80 0.11 var(--h, 75) / 0.40);
-    color: var(--fg-0);
-    display: flex; align-items: center; justify-content: center;
-    font-family: var(--font-mono); font-size: 11px; text-align: center; padding: 10px;
-    transition: all 700ms cubic-bezier(.2,.7,.2,1);
+  /* On a finished run, the synth panel stays visible (showing the substep
+     tree at "done") AND the lower-row stays interactive so the user can
+     scroll through facts + frontier of the just-completed run. */
+  .synth-h { font-size: 22px; font-weight: 500; color: var(--fg-0); margin: 6px 0 6px; letter-spacing: -0.02em; }
+  .synth-sub { color: var(--fg-2); margin-bottom: 18px; max-width: 64ch; }
+  /* Synthesis substep staircase — mirrors the pipeline cards visual language
+     (mono uppercase label, left number, right value) but anchored to the left
+     with left-edge border instead of right. */
+  .synth-substeps {
+    list-style: none; padding: 0; margin: 0;
+    display: grid; grid-template-columns: 1fr; gap: 4px;
+    width: 100%;
+    max-width: 50%;          /* match pipe-cards' compact column width */
+    justify-items: start;
   }
+  .synth-substep {
+    background: transparent;
+    border: 0;
+    border-right: 1px solid var(--line);
+    border-radius: 0;
+    padding: 9px 18px 9px 14px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    column-gap: 12px;
+    transition: background 320ms ease, border-color 320ms ease, color 320ms ease;
+    min-width: 0;
+    color: var(--fg-3);
+  }
+  /* Linear 50 → 100 staircase over 6 rows; same start/end as the pipe-cards
+     (50%, 67%, 84%, 100%) but with a smoother 6-step gradient since we have
+     6 substeps vs the pipeline's 4. */
+  .synth-substep[data-substep="thesis-drafting"] { width: 50%; }
+  .synth-substep[data-substep="triangulating"]   { width: 60%; }
+  .synth-substep[data-substep="writing"]         { width: 70%; }
+  .synth-substep[data-substep="editing"]         { width: 80%; }
+  .synth-substep[data-substep="stitching"]       { width: 90%; }
+  .synth-substep[data-substep="done"]            { width: 100%; }
+  .ss-num {
+    color: var(--fg-3);
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    width: 14px;
+    text-align: left;
+  }
+  .ss-name {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-2);
+    font-weight: 500;
+  }
+  .ss-val {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--fg-3);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.005em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    text-align: right;
+    transition: color 320ms ease;
+  }
+  .synth-substep.is-active {
+    border-right-color: var(--k-synthesis);
+    color: var(--fg-0);
+  }
+  .synth-substep.is-active .ss-num { color: var(--k-synthesis); }
+  .synth-substep.is-active .ss-name { color: var(--fg-0); }
+  .synth-substep.is-active .ss-val { color: var(--k-synthesis); }
+  .synth-substep.is-done { opacity: 0.55; }
+  .synth-substep.is-done .ss-val { color: var(--k-fact); }
+  .synth-fallback {
+    padding: 14px 16px;
+    background: oklch(0.78 0.10 50 / 0.08);
+    border: 1px solid oklch(0.78 0.10 50 / 0.40);
+    border-radius: var(--r-md);
+    color: var(--fg-0);
+    font-family: var(--font-mono); font-size: 12px;
+  }
+  .synth-fallback-reason { color: oklch(0.78 0.10 50); font-weight: 600; }
+  /* Full-width report section (sibling of synth, shown when a report exists) */
+  .report-section {
+    padding: 28px 32px;
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: var(--r-lg);
+    margin-top: 18px;
+  }
+  /* In-browser rendered report (v2 viewer) — renders directly on the
+     .report-section background; no nested box, no inner border. */
+  .report-viewer {
+    max-height: 80vh; overflow-y: auto;
+    color: var(--fg-1);
+    line-height: 1.65;
+    font-size: 14px;
+    letter-spacing: -0.005em;
+  }
+  .report-viewer h1, .report-viewer h2, .report-viewer h3 {
+    color: var(--fg-0);
+    letter-spacing: -0.02em;
+    margin-top: 1.8em;
+    margin-bottom: 0.6em;
+    font-weight: 500;
+  }
+  .report-viewer h1 { font-size: 24px; }
+  .report-viewer h2 { font-size: 18px; padding-bottom: 4px; border-bottom: 1px solid var(--line-soft); }
+  .report-viewer h3 { font-size: 15px; color: var(--fg-1); }
+  .report-viewer p { margin: 0.8em 0; }
+  .report-viewer ul, .report-viewer ol { padding-left: 1.6em; margin: 0.6em 0; }
+  .report-viewer li { margin: 0.3em 0; }
+  .report-viewer code { font-family: var(--font-mono); font-size: 0.88em; background: var(--bg-3); padding: 1px 5px; border-radius: 3px; }
+  .report-viewer strong { color: var(--fg-0); font-weight: 500; }
+  .report-viewer em { color: var(--fg-0); font-style: italic; }
+  .report-viewer a:not(.citation) { color: var(--k-llm); text-decoration: none; border-bottom: 1px dotted var(--k-llm); }
+  .report-viewer a:not(.citation):hover { color: var(--fg-0); border-bottom-color: var(--fg-0); }
+  .citation {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    color: var(--k-fact);
+    background: oklch(0.82 0.13 175 / 0.10);
+    padding: 1px 5px;
+    margin: 0 1px;
+    border-radius: 3px;
+    text-decoration: none;
+    transition: background 200ms ease, color 200ms ease;
+  }
+  .citation:hover { background: oklch(0.82 0.13 175 / 0.25); color: var(--fg-0); }
+  .sources-list { font-family: var(--font-mono); font-size: 12px; color: var(--fg-2); }
+  .sources-list li { margin: 0.4em 0; word-break: break-all; }
+  /* Topic-group view in Facts panel */
+  .topic-group-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 0 8px;
+    border-bottom: 1px solid var(--line-soft);
+    margin-top: 6px;
+  }
+  .topic-group-head .topic-count { color: var(--fg-3); font-family: var(--font-mono); font-size: 11px; }
+  .topic-group:first-child .topic-group-head { margin-top: 0; }
+  /* Contract pane shown alongside the substep tree */
+  .contract-pane {
+    margin-top: 18px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    font-family: var(--font-mono); font-size: 11px; color: var(--fg-2);
+  }
+  .contract-core { color: var(--fg-0); font-size: 13px; margin-bottom: 8px; font-family: var(--font-sans, inherit); }
+  .contract-counts { display: flex; gap: 14px; }
+  .contract-counts > span > b { color: var(--fg-1); }
   .sections { display: flex; flex-direction: column; gap: 10px; }
   .section-row {
     display: grid;
@@ -1047,9 +1195,9 @@
           </div>
         </div>
         <div class="run-clock">
-          <div class="eyebrow">remaining</div>
+          <div class="eyebrow" id="clock-eyebrow">remaining</div>
           <div class="clock-big">
-            <span id="clock-h">02</span><span class="u">h</span>
+            <span id="clock-sign"></span><span id="clock-h">02</span><span class="u">h</span>
             <span id="clock-m">47</span><span class="u">m</span>
             <span id="clock-s">12</span><span class="u">s</span>
           </div>
@@ -1130,10 +1278,10 @@
     <!-- Facts -->
     <div class="panel" data-screen-label="Facts feed">
       <div class="panel-head">
-        <div class="panel-title">Facts<span class="count" id="facts-count">+22 in last iter</span></div>
-        <div class="panel-actions">
-          <span class="chip is-on">recent</span>
-          <span class="chip">by topic</span>
+        <div class="panel-title">Facts<span class="count" id="facts-count">—</span></div>
+        <div class="panel-actions" id="facts-view-modes">
+          <span class="chip is-on" data-mode="recent">recent</span>
+          <span class="chip" data-mode="topic">by topic</span>
         </div>
       </div>
       <div class="facts" id="facts"></div>
@@ -1152,6 +1300,10 @@
         <span class="chip" data-fam="fact"><span class="dot" style="background: var(--k-fact)"></span>fact</span>
         <span class="chip" data-fam="frontier"><span class="dot" style="background: var(--k-frontier)"></span>frontier</span>
         <span class="chip" data-fam="phase"><span class="dot" style="background: var(--k-phase)"></span>phase</span>
+        <span class="chip" data-fam="source"><span class="dot" style="background: var(--k-source)"></span>source</span>
+        <span class="chip" data-fam="contract"><span class="dot" style="background: var(--k-contract)"></span>contract</span>
+        <span class="chip" data-fam="gap"><span class="dot" style="background: var(--k-gap)"></span>gap</span>
+        <span class="chip" data-fam="synthesis"><span class="dot" style="background: var(--k-synthesis)"></span>synthesis</span>
       </div>
       <div class="log-status">
         <span id="log-rate">~ 14 ev/s</span>
@@ -1161,22 +1313,66 @@
     <div class="log" id="log"></div>
   </section>
 
-  <!-- SYNTHESIS PANEL -->
+  <!-- SYNTHESIS PANEL (single-column) -->
   <section class="synth" id="synth">
-    <div>
-      <div class="eyebrow" style="color: var(--phase-synthesis)">Synthesis · phase 3 of 3</div>
-      <h2 class="synth-h">Clustering 287 claims into themes.</h2>
-      <p class="synth-sub">Search is closed. Sheldon is grouping evidence by topic and writing report sections one at a time.</p>
-      <div class="clusters" id="clusters"></div>
-    </div>
-    <div>
-      <div class="panel-title" style="margin-bottom: 14px;">Report sections</div>
-      <div class="sections" id="sections"></div>
-      <div id="report-ready" style="display:none; margin-top: 18px; padding: 18px 20px; background: var(--bg-2); border: 1px solid var(--phase-synthesis); border-radius: var(--r-lg);">
-        <div class="eyebrow" style="color: var(--phase-synthesis); margin-bottom: 6px;">Report ready</div>
-        <div style="font-size: 18px; color: var(--fg-0); font-weight: 500; letter-spacing: -0.01em;">report.md · 47 KB · 6 sections · 142 citations</div>
+    <div class="eyebrow" style="color: var(--phase-synthesis)">Synthesis · phase 3 of 3</div>
+    <h2 class="synth-h" id="synth-headline">Synthesis pending</h2>
+    <p class="synth-sub" id="synth-subtitle">Waiting for breadth + depth gathering to complete.</p>
+    <div id="synth-progress">
+      <ul class="synth-substeps" id="synth-substeps">
+        <li class="synth-substep" data-substep="thesis-drafting">
+          <span class="ss-num">1</span>
+          <span class="ss-name">Thesis</span>
+          <span class="ss-val">—</span>
+        </li>
+        <li class="synth-substep" data-substep="triangulating">
+          <span class="ss-num">2</span>
+          <span class="ss-name">Triangulate</span>
+          <span class="ss-val">—</span>
+        </li>
+        <li class="synth-substep" data-substep="writing">
+          <span class="ss-num">3</span>
+          <span class="ss-name">Write sections</span>
+          <span class="ss-val">—</span>
+        </li>
+        <li class="synth-substep" data-substep="editing">
+          <span class="ss-num">4</span>
+          <span class="ss-name">Brutal edit</span>
+          <span class="ss-val">—</span>
+        </li>
+        <li class="synth-substep" data-substep="stitching">
+          <span class="ss-num">5</span>
+          <span class="ss-name">Stitch report</span>
+          <span class="ss-val">—</span>
+        </li>
+        <li class="synth-substep" data-substep="done">
+          <span class="ss-num">6</span>
+          <span class="ss-name">Done</span>
+          <span class="ss-val">—</span>
+        </li>
+      </ul>
+      <div class="synth-fallback" id="synth-fallback" style="display:none;">
+        <div><b>Cluster fallback</b> — reason: <span class="synth-fallback-reason" id="synth-fallback-reason">—</span></div>
+        <div style="margin-top:6px;">Sections: <span id="synth-fallback-sections">0</span> written · <span id="synth-fallback-dropped">0</span> dropped</div>
       </div>
     </div>
+    <div class="contract-pane" id="contract-pane" style="display:none;">
+      <div class="contract-core" id="contract-core">—</div>
+      <div class="contract-counts">
+        <span>sub-qs: <b id="contract-sub-count">0</b></span>
+        <span>good-answer: <b id="contract-good-count">0</b></span>
+        <span>out-of-scope: <b id="contract-oos-count">0</b></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- REPORT SECTION (full-width, below synth) -->
+  <section class="report-section" id="report-section" style="display:none;">
+    <div class="panel-head" style="margin-bottom: 16px;">
+      <div class="panel-title">Report</div>
+      <div class="panel-actions" id="report-actions"><span class="chip" id="report-path-chip" style="font-family:var(--font-mono); font-size:11px;">—</span></div>
+    </div>
+    <div id="report-viewer" class="report-viewer"></div>
   </section>
 </div>
 
@@ -1206,8 +1402,12 @@ let STATS = {
 
 function totalDur() { return (RUN.deadlineAt && RUN.startedAt) ? (RUN.deadlineAt - RUN.startedAt) : 1; }
 function nowOrFrozen() {
-  // Freeze "current time" at the run's end timestamp once the agent finished.
-  return (RUN.phase === "done" && RUN.endedAt) ? RUN.endedAt : Date.now();
+  // Freeze "current time" only when the report file has been written.
+  // run.end fires BEFORE synthesize() runs, so RUN.endedAt is too early —
+  // synthesis can take many minutes more. The user wants the clock to keep
+  // ticking (going negative if past deadline) until the report is on disk.
+  if (typeof synthState !== "undefined" && synthState.reportWrittenAt) return synthState.reportWrittenAt;
+  return Date.now();
 }
 function pctElapsed() {
   if (!RUN.deadlineAt || !RUN.startedAt) return 0;
@@ -1220,12 +1420,16 @@ function hueFor(tag) { let h = 0; for (let i = 0; i < tag.length; i++) h = (h * 
 const KIND_FAM = {
   "llm.fast":"llm","llm.deep":"llm","search.query":"search",
   "scrape.fetch":"scrape","scrape.skip":"scrape",
+  "source.classified":"source",
   "chunk.split":"chunk","embed.batch":"embed","claim.extract":"claim",
-  "fact.write":"fact","fact.dedupe":"fact",
+  "fact.write":"fact","fact.dedupe":"fact","fact.dropped.irrelevant":"fact",
   "frontier.seed":"frontier","frontier.push":"frontier","frontier.pop":"frontier","frontier.dedupe":"frontier","frontier.done":"frontier","frontier.skip":"frontier",
   "iteration.start":"iteration","iteration.end":"iteration",
   "phase.transition":"phase","run.start":"phase","run.end":"phase",
+  "contract.drafted":"contract","contract.revised":"contract",
+  "gap.analyzed":"gap",
   "cluster.computed":"cluster","section.written":"section","report.written":"report",
+  "thesis.drafted":"synthesis","claim.triangulated":"synthesis","section.rubric":"synthesis","section.dropped":"synthesis","synthesis.fallback":"synthesis",
   "resume.detected":"resume","resume.applied":"resume",
 };
 
@@ -1349,18 +1553,45 @@ function factHtml(f, entering) {
     </div>
   </div>`;
 }
+let factsViewMode = "recent"; // "recent" or "topic"
+
 function renderFacts() {
-  $("#facts").innerHTML = FACTS.slice(0, 18).map(f => factHtml(f, false)).join("");
+  const root = $("#facts");
+  if (factsViewMode === "recent") {
+    root.innerHTML = FACTS.slice(0, 18).map(f => factHtml(f, false)).join("");
+    return;
+  }
+  // by-topic view: group facts by `f.topic` (defaulting to "misc"), sort groups by size desc.
+  const groups = new Map();
+  for (const f of FACTS.slice(0, 60)) {
+    const topic = (f.topic && f.topic.trim()) || "misc";
+    if (!groups.has(topic)) groups.set(topic, []);
+    groups.get(topic).push(f);
+  }
+  const sorted = Array.from(groups.entries()).sort((a, b) => b[1].length - a[1].length);
+  root.innerHTML = sorted.map(([topic, facts]) => {
+    const head = `<div class="topic-group-head"><span class="topic" style="--h:${hueFor(topic)}">${escapeHtml(topic)}</span><span class="topic-count">${facts.length} fact${facts.length === 1 ? '' : 's'}</span></div>`;
+    const body = facts.sort((a, b) => b.ts - a.ts).map(f => factHtml(f, false)).join("");
+    return `<div class="topic-group">${head}${body}</div>`;
+  }).join("");
 }
 
 function pad(n) { return String(n).padStart(2,"0"); }
 function tickClock() {
   if (RUN.phase === "idle" || !RUN.deadlineAt || !RUN.startedAt) return;
   const t = nowOrFrozen();
-  const remaining = Math.max(0, RUN.deadlineAt - t);
-  $("#clock-h").textContent = pad(Math.floor(remaining/3600000));
-  $("#clock-m").textContent = pad(Math.floor(remaining/60000) % 60);
-  $("#clock-s").textContent = pad(Math.floor(remaining/1000) % 60);
+  // Allow negative remaining time: continue counting past the deadline.
+  // Display the magnitude with a "-" prefix when overrunning.
+  const remainingRaw = RUN.deadlineAt - t;
+  const isOvertime = remainingRaw < 0;
+  const abs = Math.abs(remainingRaw);
+  $("#clock-h").textContent = pad(Math.floor(abs/3600000));
+  $("#clock-m").textContent = pad(Math.floor(abs/60000) % 60);
+  $("#clock-s").textContent = pad(Math.floor(abs/1000) % 60);
+  const $sign = $("#clock-sign");
+  const $eyebrow = $("#clock-eyebrow");
+  if ($sign) $sign.textContent = isOvertime ? "-" : "";
+  if ($eyebrow) $eyebrow.textContent = isOvertime ? "over deadline" : "remaining";
   const elapsed = Math.max(0, t - RUN.startedAt);
   $("#clock-elapsed").textContent = `${pad(Math.floor(elapsed/3600000))}:${pad(Math.floor(elapsed/60000)%60)}:${pad(Math.floor(elapsed/1000)%60)}`;
   const dl = new Date(RUN.deadlineAt);
@@ -1532,10 +1763,257 @@ function applyNowQuestionFromState() {
   }, 240);
 }
 
-// ----- synthesis section (placeholder rendering until /api/sections lands) -----
+// ----- synthesis section: v2 substep tree + cluster-fallback view -----
+const SYNTH_SUBSTEPS = ['thesis-drafting','triangulating','writing','editing','stitching','done'];
+const SYNTH_COPY = {
+  'idle':             { h: 'Synthesis pending',                 s: 'Waiting for breadth + depth gathering to complete.' },
+  'thesis-drafting':  { h: 'Drafting the thesis',               s: 'Sampling the most task-relevant, source-diverse evidence to draft 4–7 load-bearing claims.' },
+  'triangulating':    { h: 'Triangulating load-bearing claims', s: 'Running targeted corroborate / contradict searches per claim.' },
+  'writing':          { h: 'Writing one section per claim',     s: 'Each section defends its claim with ranked evidence.' },
+  'editing':          { h: 'Brutal-editing weak sections',      s: 'Each section is checked against a rubric; failures get one revision attempt, then drop.' },
+  'stitching':        { h: 'Stitching the final report',        s: 'Renumbering citations, rendering intro and conclusion.' },
+  'done':             { h: 'Report ready',                      s: 'Click any citation in the rendered report to open its source in a new tab.' },
+  'fallback':         { h: 'Falling back to cluster synthesis', s: 'The thesis path returned no usable claims; the legacy cluster pipeline is producing the report.' },
+};
+const synthState = {
+  substep: 'idle',
+  thesisClaimCount: null,
+  claims: new Map(),         // headline -> {corroborations, contradictions, contested}
+  sectionsWritten: 0,
+  sectionsDropped: 0,
+  reportPath: null,
+  reportWrittenAt: null,     // ms timestamp; freezes the clock when set
+  fallbackReason: null,
+  writtenHeadlines: new Set(),
+  rubricForHeadline: new Set(),
+};
+
+function substepIndex(s) { const i = SYNTH_SUBSTEPS.indexOf(s); return i; }
+function recomputeSubstep() {
+  if (synthState.fallbackReason !== null && synthState.reportPath === null) return 'fallback';
+  if (synthState.reportPath !== null) return 'done';
+  if (synthState.thesisClaimCount !== null && synthState.sectionsWritten >= synthState.thesisClaimCount && synthState.thesisClaimCount > 0) return 'stitching';
+  if (synthState.rubricForHeadline.size > 0) return 'editing';
+  if (synthState.sectionsWritten > 0) return 'writing';
+  if (synthState.claims.size > 0) return 'triangulating';
+  if (synthState.thesisClaimCount !== null) return 'thesis-drafting';
+  return 'idle';
+}
+
 function renderSynth() {
-  $("#clusters").innerHTML = `<div style="position:absolute; inset:20px; display:flex; align-items:center; justify-content:center; color:var(--fg-3); font-family:var(--font-mono); font-size:11px;">clusters forming…</div>`;
-  $("#sections").innerHTML = `<div style="color:var(--fg-3); font-family:var(--font-mono); font-size:11px; padding:14px;">sections will appear as they're written.</div>`;
+  const sub = synthState.substep;
+  const fallbackOn = sub === 'fallback';
+  const $tree = $('#synth-substeps');
+  const $fallback = $('#synth-fallback');
+  if (!$tree || !$fallback) return; // synth section not in DOM yet
+
+  // Headline + subtitle reflect the active substep.
+  const copy = SYNTH_COPY[sub] || SYNTH_COPY['idle'];
+  const $h = $('#synth-headline');
+  const $s = $('#synth-subtitle');
+  if ($h) $h.textContent = copy.h;
+  if ($s) {
+    let subtitle = copy.s;
+    if (sub === 'fallback' && synthState.fallbackReason) {
+      subtitle = `${copy.s} Reason: ${synthState.fallbackReason}.`;
+    }
+    $s.textContent = subtitle;
+  }
+
+  $tree.style.display = fallbackOn ? 'none' : '';
+  $fallback.style.display = fallbackOn ? '' : 'none';
+
+  if (fallbackOn) {
+    $('#synth-fallback-reason').textContent = synthState.fallbackReason || '—';
+    $('#synth-fallback-sections').textContent = String(synthState.sectionsWritten);
+    $('#synth-fallback-dropped').textContent = String(synthState.sectionsDropped);
+  } else {
+    const activeIdx = substepIndex(sub);
+    for (const li of $tree.querySelectorAll('.synth-substep')) {
+      const step = li.dataset.substep;
+      const i = substepIndex(step);
+      li.classList.remove('is-active','is-done');
+      if (sub === 'done') {
+        li.classList.add('is-done');
+      } else if (i < activeIdx && activeIdx >= 0) {
+        li.classList.add('is-done');
+      } else if (i === activeIdx) {
+        li.classList.add('is-active');
+      }
+      const $val = li.querySelector('.ss-val');
+      if (!$val) continue;
+      const isDone = li.classList.contains('is-done');
+      const isActive = li.classList.contains('is-active');
+
+      // Per-step value text. Defaults to status indicator (–/•/✓) and fills with
+      // a summary count when relevant.
+      let s = '';
+      if (step === 'thesis-drafting' && synthState.thesisClaimCount !== null) {
+        s = `${synthState.thesisClaimCount} claims`;
+      } else if (step === 'triangulating') {
+        if (synthState.thesisClaimCount !== null) s = `${synthState.claims.size} / ${synthState.thesisClaimCount}`;
+        else if (synthState.claims.size > 0) s = `${synthState.claims.size}`;
+      } else if (step === 'writing' || step === 'stitching') {
+        if (synthState.thesisClaimCount !== null) s = `${synthState.sectionsWritten} / ${synthState.thesisClaimCount}${synthState.sectionsDropped ? ` · -${synthState.sectionsDropped}` : ''}`;
+        else if (synthState.sectionsWritten > 0) s = `${synthState.sectionsWritten}${synthState.sectionsDropped ? ` · -${synthState.sectionsDropped}` : ''}`;
+      } else if (step === 'editing') {
+        if (synthState.rubricForHeadline.size > 0) s = `${synthState.rubricForHeadline.size} revised`;
+      } else if (step === 'done' && synthState.reportPath) {
+        s = '✓';
+      }
+      if (!s) s = isDone ? '✓' : (isActive ? '•' : '—');
+      $val.textContent = s;
+    }
+  }
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+
+// Apply a single event to synthState (idempotent where possible).
+function applyEventToSynth(ev) {
+  const p = ev && ev.payload || {};
+  switch (ev.kind) {
+    case 'thesis.drafted':
+      if (typeof p.claimCount === 'number') synthState.thesisClaimCount = p.claimCount;
+      synthState.claims.clear();
+      synthState.writtenHeadlines.clear();
+      synthState.rubricForHeadline.clear();
+      synthState.sectionsWritten = 0;
+      synthState.sectionsDropped = 0;
+      synthState.reportPath = null;
+      synthState.fallbackReason = null;
+      break;
+    case 'claim.triangulated': {
+      const h = typeof p.claimHeadline === 'string' ? p.claimHeadline : null;
+      if (h) synthState.claims.set(h, {
+        corroborations: typeof p.corroborations === 'number' ? p.corroborations : 0,
+        contradictions: typeof p.contradictions === 'number' ? p.contradictions : 0,
+        contested: !!p.contested,
+      });
+      break;
+    }
+    case 'section.written': {
+      const label = typeof p.label === 'string' ? p.label : null;
+      if (label && !synthState.writtenHeadlines.has(label)) {
+        synthState.writtenHeadlines.add(label);
+        synthState.sectionsWritten++;
+      }
+      break;
+    }
+    case 'section.dropped':
+      synthState.sectionsDropped++;
+      break;
+    case 'section.rubric': {
+      const h = typeof p.headline === 'string' ? p.headline : null;
+      if (h && synthState.writtenHeadlines.has(h)) synthState.rubricForHeadline.add(h);
+      break;
+    }
+    case 'synthesis.fallback':
+      synthState.fallbackReason = typeof p.reason === 'string' ? p.reason : 'unknown';
+      synthState.sectionsWritten = 0;
+      synthState.sectionsDropped = 0;
+      synthState.writtenHeadlines.clear();
+      break;
+    case 'report.written':
+      synthState.reportPath = typeof p.path === 'string' ? p.path : null;
+      synthState.reportWrittenAt = Date.now();
+      pollReport();
+      break;
+    case 'iteration.end': {
+      const fc = typeof p.factsAdded === 'number' ? p.factsAdded : 0;
+      const $fc = $('#facts-count');
+      if ($fc) $fc.textContent = `+${fc} in last iter`;
+      break;
+    }
+    case 'contract.drafted':
+    case 'contract.revised':
+      // Trigger a contract refetch; handled in pollContract().
+      pollContract();
+      break;
+    case 'run.start':
+      // Reset all synth state on a new run.
+      synthState.substep = 'idle';
+      synthState.thesisClaimCount = null;
+      synthState.claims.clear();
+      synthState.sectionsWritten = 0;
+      synthState.sectionsDropped = 0;
+      synthState.reportPath = null;
+      synthState.reportWrittenAt = null;
+      synthState.fallbackReason = null;
+      synthState.writtenHeadlines.clear();
+      synthState.rubricForHeadline.clear();
+      break;
+  }
+  synthState.substep = recomputeSubstep();
+}
+
+async function pollSynthSnapshot() {
+  try {
+    const r = await fetch('/api/synthesis-state');
+    if (!r.ok) return;
+    const s = await r.json();
+    synthState.substep = s.substep || 'idle';
+    synthState.thesisClaimCount = (typeof s.thesisClaimCount === 'number') ? s.thesisClaimCount : null;
+    synthState.claims.clear();
+    if (Array.isArray(s.claims)) {
+      for (const c of s.claims) synthState.claims.set(c.headline, {
+        corroborations: c.corroborations || 0,
+        contradictions: c.contradictions || 0,
+        contested: !!c.contested,
+      });
+    }
+    synthState.sectionsWritten = s.sectionsWritten || 0;
+    synthState.sectionsDropped = s.sectionsDropped || 0;
+    synthState.reportPath = s.reportPath || null;
+    synthState.fallbackReason = s.fallbackReason || null;
+    // If the snapshot says a report exists but we never saw the SSE event,
+    // freeze the clock at "now". Acceptable approximation when the dashboard
+    // opens after the run completed.
+    if (synthState.reportPath && !synthState.reportWrittenAt) {
+      synthState.reportWrittenAt = Date.now();
+    }
+    renderSynth();
+  } catch {}
+}
+
+async function pollContract() {
+  try {
+    const r = await fetch('/api/contract');
+    if (!r.ok) return;
+    const c = await r.json();
+    const $pane = $('#contract-pane');
+    if (!c) { $pane.style.display = 'none'; return; }
+    $pane.style.display = '';
+    $('#contract-core').textContent = c.core_question || '—';
+    $('#contract-sub-count').textContent = String((c.sub_questions || []).length);
+    $('#contract-good-count').textContent = String((c.good_answer_contains || []).length);
+    $('#contract-oos-count').textContent = String((c.out_of_scope || []).length);
+  } catch {}
+}
+
+let reportFetchInFlight = false;
+async function pollReport() {
+  if (reportFetchInFlight) return;
+  reportFetchInFlight = true;
+  try {
+    const r = await fetch('/api/report');
+    if (!r.ok) return;
+    const data = await r.json();
+    const $section = $('#report-section');
+    const $viewer = $('#report-viewer');
+    const $pathChip = $('#report-path-chip');
+    if (!data) {
+      if ($section) $section.style.display = 'none';
+      return;
+    }
+    if ($viewer) $viewer.innerHTML = data.html || '';
+    if ($pathChip) $pathChip.textContent = data.path ? data.path.split('/').pop() : '—';
+    if ($section) $section.style.display = '';
+  } catch {
+    // best-effort: leave the section in its current state
+  } finally {
+    reportFetchInFlight = false;
+  }
 }
 
 // ----- snapshot polling + SSE -----
@@ -1606,6 +2084,9 @@ function connectLive() {
     try {
       const ev = JSON.parse(e.data);
       pushEvent({ ts: ev.ts || Date.now(), kind: ev.kind, layer: ev.layer || "", durationMs: ev.durationMs, summary: ev.summary || "", error: !!ev.error });
+      // SSE also drives the v2 synthesis substep tree.
+      applyEventToSynth({ kind: ev.kind, payload: ev.payload ?? {} });
+      renderSynth();
     } catch {}
   };
   es.onerror = () => { /* browser will retry automatically */ };
@@ -1635,6 +2116,19 @@ $$('.chip[data-q-filter]').forEach(c => c.addEventListener("click", () => {
   $$('.chip[data-q-filter]').forEach(x => x.classList.remove("is-on"));
   c.classList.add("is-on"); renderFrontier();
 }));
+// Facts view-mode chips: "recent" vs "by topic"
+const $factsModes = $("#facts-view-modes");
+if ($factsModes) {
+  $factsModes.addEventListener("click", e => {
+    const chip = e.target.closest(".chip");
+    if (!chip || !chip.dataset.mode) return;
+    if (chip.dataset.mode === factsViewMode) return;
+    $$("#facts-view-modes .chip").forEach(c => c.classList.remove("is-on"));
+    chip.classList.add("is-on");
+    factsViewMode = chip.dataset.mode;
+    renderFacts();
+  });
+}
 
 // ----- bootstrap -----
 buildPipe();
@@ -1642,7 +2136,12 @@ renderLog();
 renderStats();
 (async () => {
   await pollRunState();
-  await Promise.all([pollFrontier(), pollFacts(), pollStats()]);
+  await Promise.all([pollFrontier(), pollFacts(), pollStats(), pollContract(), pollSynthSnapshot()]);
+  // Always show the latest report on disk, even if the current run is still
+  // gathering. /api/report falls back to .sheldon/reports/latest.md when the
+  // current run's report doesn't exist yet — so the user can keep reading
+  // the previous report while a new run is in progress.
+  await pollReport();
   connectLive();
   setInterval(pollRunState, 2000);
   setInterval(pollFrontier, 2000);

@@ -8,8 +8,11 @@
  * before the crash but never marked done/skipped. Reset them to `pending`
  * so the resumed loop can re-pop and retry.
  *
- * Clear: --fresh wipes everything except `.sheldon/reports/` (past reports
- * are valuable historical artifacts).
+ * Clear: --fresh resets the run-scoped tables (facts, frontier, run_state)
+ * and the side-channel files. The `sources` classifier cache is intentionally
+ * preserved — it's a cross-run cache, paying re-classification cost on every
+ * --fresh would be wasteful. Past reports under `.sheldon/reports/` are also
+ * preserved.
  */
 
 import { unlink } from 'node:fs/promises';
@@ -18,10 +21,7 @@ import { getRunState, type RunState } from './phase.ts';
 
 const GRACE_MS = 24 * 3600 * 1000;
 
-const FILES_TO_CLEAR = [
-  '.sheldon/sheldon.db',
-  '.sheldon/sheldon.db-wal',
-  '.sheldon/sheldon.db-shm',
+const SIDE_CHANNEL_FILES_TO_CLEAR = [
   '.sheldon/events.jsonl',
   '.sheldon/last-summary.md',
 ];
@@ -43,7 +43,15 @@ export function resetInProgressFrontier(): number {
 }
 
 export async function clearAll(): Promise<void> {
-  for (const path of FILES_TO_CLEAR) {
+  // Per-table DELETE preserves the `sources` classifier cache and keeps the DB file
+  // vnode stable (the dashboard's open handle survives without SQLITE_IOERR_VNODE).
+  try {
+    const db = getDb();
+    db.exec('BEGIN; DELETE FROM facts; DELETE FROM frontier; DELETE FROM run_state; COMMIT;');
+  } catch {
+    // DB file or tables missing — fine, nothing to clear.
+  }
+  for (const path of SIDE_CHANNEL_FILES_TO_CLEAR) {
     try {
       await unlink(path);
     } catch {

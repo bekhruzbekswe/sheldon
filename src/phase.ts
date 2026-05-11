@@ -8,6 +8,8 @@
 
 import { getDb } from './db.ts';
 import { events } from './events.ts';
+import { embedder } from './embed.ts';
+import { draftContract, type ResearchContract } from './contract.ts';
 
 export type Phase = 'breadth' | 'depth' | 'synthesis';
 
@@ -20,6 +22,8 @@ export type RunState = {
   startedAt: number;
   deadlineAt: number;
   phase: Phase | 'done';
+  contract: ResearchContract | null;
+  taskEmbedding: Float32Array | null;
 };
 
 let lastSeenPhase: Phase | null = null;
@@ -72,7 +76,33 @@ type RawRow = {
   started_at: number;
   deadline_at: number;
   phase: string;
+  contract_json: string | null;
+  task_embedding: Buffer | Uint8Array | null;
 };
+
+function decodeContract(json: string | null): ResearchContract | null {
+  if (!json) return null;
+  try {
+    const obj = JSON.parse(json) as Partial<ResearchContract>;
+    if (typeof obj.core_question !== 'string' || !Array.isArray(obj.out_of_scope)) return null;
+    return {
+      core_question: obj.core_question,
+      sub_questions: Array.isArray(obj.sub_questions) ? obj.sub_questions : [],
+      good_answer_contains: Array.isArray(obj.good_answer_contains) ? obj.good_answer_contains : [],
+      out_of_scope: obj.out_of_scope,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function decodeEmbedding(buf: Buffer | Uint8Array | null): Float32Array | null {
+  if (!buf) return null;
+  const out = new Float32Array(buf.byteLength / 4);
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  for (let i = 0; i < out.length; i++) out[i] = view.getFloat32(i * 4, true);
+  return out;
+}
 
 export function getRunState(): RunState | null {
   const db = getDb();
@@ -83,6 +113,8 @@ export function getRunState(): RunState | null {
     startedAt: row.started_at,
     deadlineAt: row.deadline_at,
     phase: row.phase as Phase | 'done',
+    contract: decodeContract(row.contract_json),
+    taskEmbedding: decodeEmbedding(row.task_embedding),
   };
 }
 
@@ -107,6 +139,19 @@ export async function runStart(task: string, deadlineAt: number): Promise<void> 
       durationMs: deadlineAt - startedAt,
     },
   });
+
+  // Cache the task embedding on run_state for the L3 relevance gate.
+  const [taskEmbedding] = await embedder.embed([task]);
+  if (taskEmbedding) {
+    db.prepare('UPDATE run_state SET task_embedding = ? WHERE id = 1').run(
+      Buffer.from(taskEmbedding.buffer, taskEmbedding.byteOffset, taskEmbedding.byteLength),
+    );
+  }
+
+  // Draft the research contract. Failures return an empty contract (no out-of-scope items);
+  // the gate degrades to plain task cosine but the run continues.
+  const contract = await draftContract(task);
+  db.prepare('UPDATE run_state SET contract_json = ? WHERE id = 1').run(JSON.stringify(contract));
 }
 
 export type RunEndStats = {
