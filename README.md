@@ -1,5 +1,7 @@
 # Sheldon
 
+> **English** · [O'zbekcha](./README.uz.md)
+
 A research agent that runs for hours.
 
 You give it a question and a deadline. It works while you're at the gym, asleep, or in another meeting. When you come back, there's a cited Markdown report waiting — and a localhost dashboard showing every search, claim, and clustering decision it made to get there.
@@ -44,7 +46,7 @@ Full architecture in [`docs/architecture.md`](./docs/architecture.md). Per-capab
 You'll need: [Bun](https://bun.sh), an OpenAI-compatible LLM endpoint, and a SearXNG instance.
 
 ```bash
-git clone <repo> sheldon && cd sheldon
+git clone https://github.com/bekhruzbekswe/sheldon.git && cd sheldon
 bun install
 cp .env.example .env
 $EDITOR .env   # point LLM_BASE_URL + LLM_MODEL at any OpenAI-compatible endpoint
